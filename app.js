@@ -167,7 +167,7 @@ async function cleanupUnusedPhotoIds(photoIds) {
 }
 function photoRecordButton(scope, index, entry) {
   let count = entry?.photoIds?.length || 0;
-  return count ? `<button class="photo-record-button" type="button" onclick="openRecordPhotos('${scope}',${index})">📷 ${count}</button>` : "";
+  return `<button class="photo-record-button" type="button" onclick="openRecordPhotos('${scope}',${index})">${count ? `📷 ${count}` : "📷＋"}</button>`;
 }
 function clearPhotoViewerUrls() {
   photoViewerUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -175,26 +175,66 @@ function clearPhotoViewerUrls() {
 }
 async function openRecordPhotos(scope, index) {
   let entry = recordForPhotos(scope, index);
-  if (!entry?.photoIds?.length) return alert("這筆紀錄目前沒有照片");
+  if (!entry) return alert("找不到這筆紀錄");
+  entry.photoIds ||= [];
   photoViewerContext = { scope, index };
   clearPhotoViewerUrls();
   $("photoViewerTitle").textContent = entry.item || entry.cat || "照片附件";
   $("photoViewerGrid").innerHTML = '<div class="muted">照片載入中…</div>';
+  $("photoFullStrip").innerHTML = "";
+  $("photoFullStrip").hidden = true;
   openM("photoViewerM");
-  let rows = [];
+  let rows = [], fullRows = [];
   for (let photoId of entry.photoIds) {
     let stored = await photoDbAction("get", photoId).catch(() => null);
     if (!stored?.blob) continue;
     let url = URL.createObjectURL(stored.blob), urlIndex = photoViewerUrls.push(url) - 1;
     rows.push(`<div class="photo-thumb"><img src="${url}" alt="記帳照片" onclick="openFullPhoto(${urlIndex})"><button class="photo-remove" type="button" aria-label="刪除照片" onclick="deleteSavedPhoto('${photoId}')">×</button></div>`);
+    fullRows.push(`<div class="photo-full-slide"><img src="${url}" alt="記帳原圖 ${urlIndex + 1}"></div>`);
   }
-  $("photoViewerGrid").innerHTML = rows.join("") || '<div class="muted">照片檔案已不存在</div>';
+  $("photoViewerGrid").innerHTML = rows.join("") || '<div class="muted">尚無照片，可使用上方的「拍照」或「選擇檔案」加入。</div>';
+  $("photoFullStrip").innerHTML = fullRows.join("");
+}
+async function addPhotosToExisting(fileList) {
+  if (!photoViewerContext) return;
+  let entry = recordForPhotos(photoViewerContext.scope, photoViewerContext.index),
+    files = [...(fileList || [])].filter((file) => file.type.startsWith("image/"));
+  if (!entry || !files.length) return;
+  entry.photoIds ||= [];
+  if (entry.photoIds.length + files.length > PHOTO_LIMIT_PER_ENTRY) {
+    alert(`每筆最多 ${PHOTO_LIMIT_PER_ENTRY} 張照片`);
+    files = files.slice(0, PHOTO_LIMIT_PER_ENTRY - entry.photoIds.length);
+  }
+  if (!files.length) return;
+  try {
+    entry.id ||= recordUid(photoViewerContext.scope);
+    for (let file of files) {
+      let blob = await compressPhoto(file), id = photoUid();
+      await photoDbAction("put", { id, recordId: entry.id, blob, createdAt: Date.now() });
+      entry.photoIds.push(id);
+    }
+    persist();
+    if (photoViewerContext.scope === "formal") renderRecent(); else detail();
+    await openRecordPhotos(photoViewerContext.scope, photoViewerContext.index);
+  } catch {
+    alert("照片儲存失敗，請確認瀏覽器儲存空間後再試一次");
+  } finally {
+    if ($("viewerPhotoCamera")) $("viewerPhotoCamera").value = "";
+    if ($("viewerPhotoFiles")) $("viewerPhotoFiles").value = "";
+  }
 }
 function openFullPhoto(index) {
-  let url = photoViewerUrls[index];
-  if (url) window.open(url, "_blank", "noopener");
+  let strip = $("photoFullStrip"), slide = strip?.children[index];
+  if (!strip || !slide) return;
+  strip.hidden = false;
+  requestAnimationFrame(() => {
+    strip.scrollTo({ left: slide.offsetLeft - strip.offsetLeft, behavior: "smooth" });
+    strip.scrollIntoView({ behavior: "smooth", block: "end" });
+  });
 }
 function closePhotoViewer() {
+  $("photoFullStrip").innerHTML = "";
+  $("photoFullStrip").hidden = true;
   clearPhotoViewerUrls();
   photoViewerContext = null;
   closeM("photoViewerM");
@@ -730,15 +770,26 @@ function openExpense() {
   resetPhotoPicker("formal");
   setCurrentDateTime("edate", "etime");
   $("ecat").innerHTML = D.cats.map((x) => `<option>${x}</option>`).join("");
+  $("ecat").value = D.cats.includes("餐飲") ? "餐飲" : (D.cats[0] || "");
   renderLocations();
-  $("eitem").value = $("eamt").value = $("emixamt1").value = $("emixamt2").value = "";
-  $("emixpay1").value = "現金";
-  $("emixpay2").value = "貨到付款";
-  cardToggle();
+  $("eitem").value = $("elocation").value = $("eamt").value = "";
+  $("emixamt1").value = $("emixamt2").value = "";
+  $("pamt").value = $("recv").value = $("other").value = $("rdate").value = "";
+  $("epay").value = "現金";
+  $("ecalendar").checked = false;
+  $("proxy").checked = false;
+  $("person").selectedIndex = -1;
+  $("proxybox").classList.add("hide");
+  $("otherbox").classList.add("hide");
   renderPrepaidSelect("eprepaid");
   renderCreditCardSelect("ecard");
   renderMixedPaymentSelect("emixpay1", "現金");
   renderMixedPaymentSelect("emixpay2", "貨到付款");
+  $("ecard").selectedIndex = -1;
+  $("eprepaid").selectedIndex = -1;
+  $("emixpay1").selectedIndex = -1;
+  $("emixpay2").selectedIndex = -1;
+  cardToggle();
 }
 const MEMBER_GROUPS_KEY = "ledger-member-groups";
 function memberGroups() {
@@ -950,6 +1001,16 @@ function home() {
       (x) =>
         `<div class="item"><b>💰 ${x.item || x.cat}－待收款</b><div class="muted">${x.person}｜${money(x.proxy - x.recv)} ${x.rdate ? "｜" + x.rdate : ""}</div></div>`,
     );
+  D.e.forEach((entry, index) => {
+    if (!entry.draft) return;
+    r.unshift(`<div class="item"><div class="top"><div><b>📝 ${esc(entry.item || "待補記帳")}</b><div class="muted">${esc(entry.date || "未填日期")}${entry.time ? ` ${esc(entry.time)}` : ""}｜正式帳本｜待補記帳</div></div><button type="button" onclick="generic('最近')">查看</button></div></div>`);
+  });
+  D.b.filter((book) => !book.imported).forEach((book) => {
+    book.entries.forEach((entry) => {
+      if (!entry.draft) return;
+      r.unshift(`<div class="item"><div class="top"><div><b>📝 ${esc(entry.item || "待補記帳")}</b><div class="muted">${esc(entry.date || "未填日期")}${entry.time ? ` ${esc(entry.time)}` : ""}｜${esc(book.name)}｜待補記帳</div></div><button type="button" onclick="openBook(${book.id})">查看</button></div></div>`);
+    });
+  });
   D.cards.forEach((card) => {
     if (!card.dueDay) return;
     let now = new Date(), lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(), due = new Date(now.getFullYear(), now.getMonth(), Math.min(+card.dueDay, lastDay));
@@ -1052,20 +1113,19 @@ function openTempEntry() {
   setCurrentDateTime("tdate", "ttime");
   $("titem").value = "";
   $("tamt").value = "";
+  $("tpay").value = "現金";
   $("tmixamt1").value = $("tmixamt2").value = "";
-  $("tmixpay1").value = "現金";
-  $("tmixpay2").value = "貨到付款";
   renderCreditCardSelect("tcard");
   renderMixedPaymentSelect("tmixpay1", "現金");
   renderMixedPaymentSelect("tmixpay2", "貨到付款");
-  $("payer").innerHTML = B.members.map((x) => `<option>${x}</option>`).join("");
-  let previousPayer = B.entries.at(-1)?.payer;
-  if (previousPayer && B.members.includes(previousPayer))
-    $("payer").value = previousPayer;
+  $("tcard").selectedIndex = -1;
+  $("tmixpay1").selectedIndex = -1;
+  $("tmixpay2").selectedIndex = -1;
+  $("payer").innerHTML = `<option value="" selected disabled>請選擇支付人</option>${B.members.map((x) => `<option>${x}</option>`).join("")}`;
   $("shares").innerHTML = B.members
     .map(
       (x) =>
-        `<label class="check"><input class="sc" type="checkbox" value="${x}" checked onchange="shareChanged()"> ${x}</label>`,
+        `<label class="check"><input class="sc" type="checkbox" value="${x}" onchange="shareChanged()"> ${x}</label>`,
     )
     .join("");
   payerToggle();
@@ -1111,6 +1171,7 @@ async function saveEntry() {
   let a = +$("tamt").value,
     ms = selected();
   let isDraft = !(a > 0);
+  if (!$("payer").value) return alert("請選擇支付人");
   if (!ms.length) return alert("請選擇分攤成員");
   if (isDraft && !pendingPhotos.temp.length) return alert("請輸入金額，或先加入照片以建立待補記帳");
   let sh =

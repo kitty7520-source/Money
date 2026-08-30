@@ -278,6 +278,10 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
         margin-top: 10px;
+        max-height: calc(min(100vw, 430px) - 32px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
       }
       .photo-thumb {
         position: relative;
@@ -310,8 +314,34 @@
         font-weight: 750;
         white-space: nowrap;
       }
-      .photo-viewer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .photo-viewer-grid .photo-thumb { aspect-ratio: 4 / 5; }
+      .photo-viewer-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .photo-viewer-grid .photo-thumb { aspect-ratio: 1; }
+      .photo-full-strip {
+        display: flex;
+        gap: 8px;
+        margin: 12px -16px 0;
+        padding: 0 0 8px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+      }
+      .photo-full-strip[hidden] { display: none; }
+      .photo-full-slide {
+        flex: 0 0 min(100vw, 430px);
+        width: min(100vw, 430px);
+        aspect-ratio: 1;
+        scroll-snap-align: center;
+        overflow: hidden;
+        background: #111;
+      }
+      .photo-full-slide img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
       body[data-theme="dark"] .photo-attachment-card { background: rgba(39,35,47,.72); border-color:#574f66; }
       .field {
         margin: 9px 0;
@@ -448,6 +478,28 @@
         background: white;
         border-radius: 20px 20px 0 0;
         padding: 17px 16px 30px;
+      }
+      .sheet-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      .sheet-title-row h2 { margin: 0; }
+      .sheet-title-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 0 0 auto;
+      }
+      .sheet-title-action {
+        width: auto;
+        height: 38px;
+        padding: 0 2px;
+        color: #7657e8;
+        font-weight: 750;
+        white-space: nowrap;
       }
       .check {
         display: block;
@@ -886,7 +938,13 @@
     </main>
     <div id="expenseM" class="modal">
       <div class="sheet">
-        <h2>新增正式支出</h2>
+        <div class="sheet-title-row">
+          <h2>新增正式支出</h2>
+          <div class="sheet-title-actions">
+            <button class="sheet-title-action" type="button" onclick="closeM('expenseM')">取消</button>
+            <button class="sheet-title-action" type="button" onclick="saveExpense()">儲存</button>
+          </div>
+        </div>
         <div class="row">
           <div class="field">
             <label>日期</label><input id="edate" type="date" />
@@ -989,10 +1047,10 @@
           <div class="photo-attachment-head"><b>📷 照片（附件）</b><span id="ephotoCount" class="photo-attachment-count">0 張</span></div>
           <div class="photo-attachment-actions">
             <button type="button" onclick="$('ephotoCamera').click()">📷 拍照</button>
-            <button type="button" onclick="$('ephotoFiles').click()">📁 選擇照片</button>
+            <button type="button" onclick="$('ephotoFiles').click()">📁 選擇檔案</button>
           </div>
           <input id="ephotoCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handlePhotoSelection('formal',this.files)" />
-          <input id="ephotoFiles" class="hide" type="file" accept="image/*" multiple onchange="handlePhotoSelection('formal',this.files)" />
+          <input id="ephotoFiles" class="hide" type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.webp" multiple onchange="handlePhotoSelection('formal',this.files)" />
           <div id="ephotoPreview" class="photo-preview-grid"></div>
           <div class="muted" style="margin-top:8px">只加照片也可先儲存為「待補記帳」；照片可個別刪除。</div>
         </div>
@@ -1114,10 +1172,10 @@
           <div class="photo-attachment-head"><b>📷 照片（附件）</b><span id="tphotoCount" class="photo-attachment-count">0 張</span></div>
           <div class="photo-attachment-actions">
             <button type="button" onclick="$('tphotoCamera').click()">📷 拍照</button>
-            <button type="button" onclick="$('tphotoFiles').click()">📁 選擇照片</button>
+            <button type="button" onclick="$('tphotoFiles').click()">📁 選擇檔案</button>
           </div>
           <input id="tphotoCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handlePhotoSelection('temp',this.files)" />
-          <input id="tphotoFiles" class="hide" type="file" accept="image/*" multiple onchange="handlePhotoSelection('temp',this.files)" />
+          <input id="tphotoFiles" class="hide" type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.webp" multiple onchange="handlePhotoSelection('temp',this.files)" />
           <div id="tphotoPreview" class="photo-preview-grid"></div>
           <div class="muted" style="margin-top:8px">只加照片也可先儲存為「待補記帳」；照片可個別刪除。</div>
         </div>
@@ -1163,8 +1221,15 @@
     <div id="photoViewerM" class="modal">
       <div class="sheet">
         <div class="top"><h2 id="photoViewerTitle">照片附件</h2><button type="button" onclick="closePhotoViewer()">關閉</button></div>
+        <div class="photo-attachment-actions">
+          <button type="button" onclick="$('viewerPhotoCamera').click()">📷 拍照</button>
+          <button type="button" onclick="$('viewerPhotoFiles').click()">📁 選擇檔案</button>
+        </div>
+        <input id="viewerPhotoCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="addPhotosToExisting(this.files)" />
+        <input id="viewerPhotoFiles" class="hide" type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.webp" multiple onchange="addPhotosToExisting(this.files)" />
         <div id="photoViewerGrid" class="photo-viewer-grid"></div>
-        <div class="muted" style="margin-top:10px">點照片可放大；右上角 × 可刪除該張照片。</div>
+        <div class="muted" style="margin-top:10px">點縮圖會在下方顯示原圖；左右滑動可查看其他照片，右上角 × 可刪除。</div>
+        <div id="photoFullStrip" class="photo-full-strip" hidden></div>
       </div>
     </div>
     <input id="backgroundFile" class="hide" type="file" accept="image/*" onchange="loadBackgroundFile(event)" />

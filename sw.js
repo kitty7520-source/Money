@@ -1,4 +1,4 @@
-const C = "ledger-v8-7-photo-attachments-20260830";
+const C = "ledger-v8-9-2-photo-grid-full-strip-20260830";
 self.addEventListener("install", (e) => {
   self.skipWaiting();
   e.waitUntil(
