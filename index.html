@@ -1,0 +1,1173 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#7657e8" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <title>日常隨手記帳</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f5f4fa;
+        color: var(--user-text-color, #272438);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+      }
+      .app {
+        max-width: 430px;
+        min-height: 100vh;
+        margin: auto;
+        padding: 18px 14px 90px;
+      }
+      .screen {
+        display: none;
+      }
+      .screen.on {
+        display: block;
+      }
+      h1 {
+        font-size: 24px;
+        margin: 5px 0;
+      }
+      .home-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .muted {
+        color: var(--user-text-color, #77758a);
+        opacity: 0.68;
+        font-size: 12px;
+      }
+      .nav {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        margin: 15px 0;
+      }
+      .nav button,
+      .back {
+        border: 0;
+        background: none;
+        padding: 9px 2px;
+      }
+      .nav button {
+        font-size: 12px;
+      }
+      .nav .active,
+      .back {
+        color: #7657e8;
+      }
+      .card {
+        background-color: #fff;
+        border: 1px solid #e7e3ef;
+        border-radius: 14px;
+        padding: 13px;
+        margin: 10px 0;
+      }
+      .card h2 {
+        font-size: 15px;
+        margin: 0 0 10px;
+      }
+      .overview-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .overview-toggle h2 {
+        margin: 0;
+      }
+      .overview-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .overview-expand,
+      .overview-analysis {
+        min-height: 36px;
+        border: 1px solid #d9d1f5;
+        border-radius: 9px;
+        background: #fff;
+        color: #7657e8;
+        font-weight: 750;
+      }
+      .overview-expand {
+        width: 38px;
+        padding: 0;
+        font-size: 22px;
+        line-height: 34px;
+      }
+      .overview-analysis {
+        padding: 0 12px;
+      }
+      .overview-content {
+        margin-top: 14px;
+      }
+      .overview-content[hidden] {
+        display: none;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .metric-notes {
+        border-top: 1px solid #ece8f3;
+        margin-top: 14px;
+        padding-top: 4px;
+      }
+      .metric-note {
+        padding: 9px 0;
+        border-bottom: 1px solid #f1eef6;
+      }
+      .metric-note:last-child {
+        border-bottom: 0;
+        padding-bottom: 2px;
+      }
+      .metric-note b {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 3px;
+      }
+      .overview-categories {
+        border-top: 1px solid #ece8f3;
+        margin-top: 12px;
+        padding-top: 14px;
+      }
+      .overview-categories h3 {
+        font-size: 14px;
+        margin: 0 0 7px;
+      }
+      .analysis-summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .analysis-stat {
+        border: 1px solid #ece8f3;
+        border-radius: 10px;
+        padding: 11px;
+      }
+      .analysis-stat .val {
+        margin-top: 3px;
+        font-size: 18px;
+      }
+      .val {
+        font-size: 20px;
+        font-weight: 750;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 5fr 1fr 5fr;
+        gap: 0;
+      }
+      .row > *:first-child {
+        grid-column: 1;
+      }
+      .row > *:nth-child(2) {
+        grid-column: 3;
+      }
+      .row.payment-row {
+        grid-template-columns: 3.5fr 0.5fr 5.2fr;
+      }
+      .payment-method-group {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        min-width: 0;
+        margin: 9px 0;
+      }
+      .payment-method-group.has-bank {
+        grid-template-columns: 2.5fr 0.2fr 2.5fr;
+      }
+      .payment-method-group > .field {
+        grid-column: 1;
+        min-width: 0;
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+      .payment-row { align-items: start; }
+      .payment-row .field label { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+      .payment-method-group.has-bank > .payment-bank {
+        grid-column: 3;
+      }
+      .location-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 7px;
+        margin: 7px 0 10px;
+      }
+      .location-actions.member-actions {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .managed-location-row {
+        display: grid;
+        grid-template-columns: 44px 6fr 0.5fr 1.5fr 0.2fr 1.5fr;
+        align-items: center;
+        gap: 0;
+      }
+      .managed-location-row button {
+        width: 100%;
+        min-width: 0;
+        height: 44px;
+        padding: 0;
+        color: #7657e8;
+        font-size: 22px;
+        font-weight: 750;
+      }
+      .managed-location-row input {
+        grid-column: 2;
+        min-width: 0;
+      }
+      .managed-location-row button:first-child { grid-column:1; width:44px; }
+      .managed-location-row button:nth-of-type(2) { grid-column:4; }
+      .managed-location-row button:nth-of-type(3) { grid-column:6; }
+      .managed-common-row {
+        display:grid;
+        grid-template-columns:6fr 0.5fr 1.5fr 0.2fr 1.5fr;
+        align-items:center;
+      }
+      .managed-common-row input { grid-column:1; min-width:0; }
+      .managed-common-row button { width:100%; min-width:0; height:44px; padding:0; color:#7657e8; font-size:22px; font-weight:750; }
+      .managed-common-row button:first-of-type { grid-column:3; }
+      .managed-common-row button:nth-of-type(2) { grid-column:5; }
+      .prepaid-select-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px 44px;
+        gap: 6px;
+        align-items: center;
+      }
+      .prepaid-select-row button { width:44px; height:44px; padding:0; color:#7657e8; font-size:22px; }
+      .photo-attachment-card {
+        border: 1px solid #e7e3ef;
+        border-radius: 14px;
+        padding: 13px;
+        margin: 14px 0;
+        background: rgba(255,255,255,.72);
+      }
+      .photo-attachment-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .photo-attachment-head b { font-size: 15px; }
+      .photo-attachment-count { color: #77758a; font-size: 12px; white-space: nowrap; }
+      .photo-attachment-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .photo-attachment-actions button {
+        min-height: 44px;
+        color: #7657e8;
+        font-weight: 750;
+      }
+      .photo-preview-grid,
+      .photo-viewer-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .photo-thumb {
+        position: relative;
+        aspect-ratio: 1;
+        overflow: hidden;
+        border-radius: 10px;
+        background: #ece9f2;
+      }
+      .photo-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .photo-remove {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        color: #c9475b;
+        font-size: 22px;
+        font-weight: 800;
+        text-shadow: 0 1px 3px #fff;
+      }
+      .photo-record-button {
+        min-height: 36px;
+        color: #7657e8;
+        font-weight: 750;
+        white-space: nowrap;
+      }
+      .photo-viewer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .photo-viewer-grid .photo-thumb { aspect-ratio: 4 / 5; }
+      body[data-theme="dark"] .photo-attachment-card { background: rgba(39,35,47,.72); border-color:#574f66; }
+      .field {
+        margin: 9px 0;
+      }
+      .field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 650;
+        margin-bottom: 5px;
+      }
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        height: 44px;
+        min-height: 44px;
+        max-height: 44px;
+        font-size: 16px;
+        line-height: 1.2;
+        border: 1px solid #dcd7e9;
+        border-radius: 9px;
+        padding: 8px;
+        background: #fff;
+      }
+      .field textarea {
+        height: 76px;
+        min-height: 76px;
+        max-height: 76px;
+        resize: vertical;
+      }
+      .field input[type="date"],
+      .field input[type="time"] {
+        -webkit-appearance: none;
+        appearance: none;
+        padding: 8px 10px;
+        min-width: 0;
+      }
+      .field input[type="date"] {
+        font-size: 14px;
+        letter-spacing: -0.4px;
+        white-space: nowrap;
+      }
+      .field input[type="date"]::-webkit-date-and-time-value {
+        text-align: left;
+        white-space: nowrap;
+      }
+      .primary,
+      .secondary {
+        width: 100%;
+        height: 44px;
+        border-radius: 10px;
+        font-weight: 700;
+      }
+      .primary {
+        border: 0;
+        background: #7657e8;
+        color: #fff;
+      }
+      .secondary {
+        border: 1px solid #d9d1f5;
+        background: #fff;
+        color: #7657e8;
+      }
+      .fab {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 50%;
+        background: #7657e8;
+        color: #fff;
+        font-size: 25px;
+        line-height: 1;
+      }
+      .item {
+        padding: 10px 0;
+        border-top: 1px solid #eeeaf3;
+      }
+      .item:first-child {
+        border: 0;
+      }
+      .temp-home-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        border-top: 1px solid #eeeaf3;
+      }
+      .temp-home-row:first-child {
+        border-top: 0;
+      }
+      .temp-home-info {
+        min-width: 0;
+      }
+      .temp-quick-add {
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 50%;
+        background: #7657e8;
+        color: #fff;
+        font-size: 25px;
+        line-height: 1;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .badge {
+        font-size: 11px;
+        background: #f0ebff;
+        color: #7657e8;
+        border-radius: 10px;
+        padding: 3px 7px;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #0005;
+        z-index: 10;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .modal.on {
+        display: flex;
+      }
+      .sheet {
+        width: min(430px, 100%);
+        max-height: 92vh;
+        overflow: auto;
+        background: white;
+        border-radius: 20px 20px 0 0;
+        padding: 17px 16px 30px;
+      }
+      .check {
+        display: block;
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .share-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .share-tools { display: flex; align-items: center; gap: 8px; }
+      .share-head .check { margin: 0; white-space: nowrap; }
+      .clear-shares { width: auto; height: 32px; padding: 0 12px; border: 1px solid #d9d1f5; border-radius: 9px; background: #fff; color: #7657e8; font-weight: 700; }
+      .share-options { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; }
+      .share-options .check { display: flex; align-items: center; gap: 6px; margin: 0; }
+      .share-options input { width: 24px !important; height: 24px !important; min-height: 24px !important; }
+      .hide {
+        display: none;
+      }
+      .tabs {
+        display: flex;
+        border-bottom: 1px solid #e8e4ef;
+        margin: 10px 0;
+      }
+      .tabs button {
+        flex: 1;
+        border: 0;
+        background: none;
+        padding: 10px;
+      }
+      .tabs .active {
+        color: #7657e8;
+        border-bottom: 2px solid #7657e8;
+      }
+      .notice {
+        background: #f2eeff;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 12px;
+        color: #696278;
+        margin-top: 10px;
+      }
+      .red {
+        color: #d94747;
+      }
+      .green {
+        color: #278d60;
+      }
+      .custom-bg-active {
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+      }
+      #home {
+        border-radius: 18px;
+        background-color: var(--user-background-color, #f5f4fa);
+      }
+      #home > .card:not(.custom-bg-active) {
+        background-color: var(--user-background-color, #fff);
+      }
+      #home.custom-bg-active {
+        min-height: 100vh;
+        margin: -18px -14px -90px;
+        border-radius: 0;
+        padding: 18px 14px 90px;
+      }
+      .screen {
+        background-color: var(--user-background-color, #f5f4fa);
+      }
+      .screen.page-bg-active:not(#home) {
+        min-height: 100vh;
+        margin: -18px -14px -90px;
+        padding: 18px 14px 90px;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+      }
+      .background-setting-row {
+        min-height: 88px;
+        padding: 11px 0;
+        border-top: 1px solid #eeeaf3;
+      }
+      .background-setting-row:first-child {
+        border-top: 0;
+      }
+      .background-setting-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .background-setting-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .background-strength {
+        display: grid;
+        grid-template-columns: 125px 1fr;
+        align-items: center;
+        gap: 10px;
+        margin-top: 9px;
+        font-size: 12px;
+      }
+      .background-strength input {
+        width: 100%;
+      }
+      .background-small-button {
+        min-height: 38px;
+        border: 1px solid #d9d1f5;
+        border-radius: 9px;
+        padding: 0 10px;
+        background: #fff;
+        color: #7657e8;
+        font-weight: 700;
+      }
+      .background-remove {
+        color: #c9475b;
+      }
+      .color-setting-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 52px;
+        border-top: 1px solid #eeeaf3;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .color-setting-row input[type="color"] {
+        width: 54px;
+        height: 38px;
+        border: 1px solid #d9d1f5;
+        border-radius: 9px;
+        padding: 3px;
+        background: #fff;
+      }
+      .crop-sheet {
+        max-height: 96vh;
+      }
+      .crop-frame {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-height: 52vh;
+        overflow: hidden;
+        border-radius: 12px;
+        background: #191720;
+        touch-action: none;
+      }
+      #backgroundCanvas {
+        display: block;
+        width: 100%;
+        max-height: 52vh;
+        object-fit: contain;
+        touch-action: none;
+      }
+      .crop-zoom {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 10px;
+        margin: 14px 0;
+      }
+      .crop-zoom input {
+        width: 100%;
+      }
+      .recent-quick-row {
+        display: grid;
+        grid-template-columns: minmax(70px, 1fr) auto auto auto;
+        align-items: center;
+        gap: 6px;
+      }
+      .recent-main {
+        min-width: 0;
+      }
+      .recent-main b {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .recent-title-button {
+        display: block;
+        width: 100%;
+        padding: 0;
+        color: inherit;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font: inherit;
+        font-weight: 750;
+      }
+      .recent-quick-button {
+        min-width: 51px;
+        min-height: 44px;
+        border: 1px solid #d9d1f5;
+        border-radius: 9px;
+        padding: 5px 7px;
+        background: #fff;
+        color: #7657e8;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: normal;
+      }
+      .recent-delete {
+        min-width: 47px;
+        color: #c9475b;
+        background: #f6dfe4 !important;
+      }
+      .category-manage-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 48px;
+        border-top: 1px solid #eeeaf3;
+      }
+      .category-manage-row:first-of-type {
+        border-top: 0;
+      }
+      .category-delete {
+        border: 1px solid #ead4da;
+        border-radius: 8px;
+        padding: 7px 12px;
+        background: #fff;
+        color: #c9475b;
+        font-weight: 700;
+      }
+      .appearance-section h2 {
+        margin-bottom: 12px;
+      }
+      .appearance-options {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .appearance-choice {
+        min-height: 48px;
+        border: 1px solid #d9d1f5;
+        border-radius: 10px;
+        background: #fff;
+        color: #7657e8;
+        font-weight: 700;
+      }
+      .appearance-choice.selected {
+        border: 2px solid #7657e8;
+        background: #f1edff;
+      }
+      .theme-dot {
+        display: inline-block;
+        width: 15px;
+        height: 15px;
+        margin-right: 5px;
+        border: 1px solid #d5d0df;
+        border-radius: 50%;
+        vertical-align: -2px;
+      }
+      .lavender-dot { background: #f5f4fa; }
+      .warm-dot { background: #fffaf1; }
+      .dark-dot { background: #292634; }
+      body[data-theme="warm"] { background: #fffaf1; }
+      body[data-theme="warm"] .card { border-color: #ece1cf; }
+      body[data-theme="dark"] { background: #211e2a; color: #f5f2ff; }
+      body[data-theme="dark"] .card,
+      body[data-theme="dark"] .sheet { background: #302c3a; border-color: #474153; }
+      body[data-theme="dark"] .muted { color: #bbb4ca; }
+      body[data-theme="dark"] .field input,
+      body[data-theme="dark"] .field select,
+      body[data-theme="dark"] .field textarea,
+      body[data-theme="dark"] .secondary,
+      body[data-theme="dark"] .overview-expand,
+      body[data-theme="dark"] .overview-analysis,
+      body[data-theme="dark"] .recent-quick-button,
+      body[data-theme="dark"] .category-delete,
+      body[data-theme="dark"] .appearance-choice {
+        background: #27232f;
+        border-color: #574f66;
+        color: #c5b7ff;
+      }
+      body[data-theme="dark"] .background-small-button {
+        background: #27232f;
+        border-color: #574f66;
+        color: #c5b7ff;
+      }
+      body[data-theme="dark"] .appearance-choice.selected { background: #403657; }
+      body[data-font="large"] { font-size: 18px; }
+      body[data-font="large"] .muted,
+      body[data-font="large"] .nav button,
+      body[data-font="large"] .field label { font-size: 14px; }
+      body[data-font="large"] h1 { font-size: 28px; }
+      @media (max-width: 370px) {
+        .recent-quick-row { gap: 4px; }
+        .recent-quick-button { min-width: 45px; padding-inline: 4px; font-size: 11px; }
+      }
+      button {
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+      }
+      .primary,
+      .fab,
+      .temp-quick-add {
+        color: #7657e8 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section id="home" class="screen on">
+        <div class="home-title-row">
+          <div>
+            <h1>日常隨手記帳</h1>
+            <div id="month" class="muted"></div>
+          </div>
+          <button class="fab" type="button" aria-label="新增正式支出" onclick="openExpense()">＋</button>
+        </div>
+        <div class="nav">
+          <button onclick="generic('最近')">最近</button
+          ><button onclick="generic('搜尋')">搜尋</button
+          ><button onclick="generic('分類')">分類</button
+          ><button onclick="generic('背景')">背景</button
+          ><button class="active" onclick="show('temp')">臨時帳本</button>
+        </div>
+        <div id="monthOverviewCard" class="card">
+          <div class="overview-toggle">
+            <h2>本月總覽</h2>
+            <div class="overview-actions">
+              <button
+                id="monthOverviewToggle"
+                class="overview-expand"
+                type="button"
+                aria-label="展開本月總覽"
+                aria-expanded="false"
+                aria-controls="monthOverviewContent"
+                onclick="toggleMonthOverview()"
+              >＋</button>
+              <button
+                class="overview-analysis"
+                type="button"
+                onclick="openMonthlyAnalysis()"
+              >分析</button>
+            </div>
+          </div>
+          <div id="monthOverviewContent" class="overview-content" hidden>
+            <div class="metrics">
+              <div>
+                <span class="muted">本月已支出</span>
+                <div id="paid" class="val">$0</div>
+              </div>
+              <div>
+                <span class="muted">目前待付款</span>
+                <div id="pending" class="val">$0</div>
+              </div>
+              <div>
+                <span class="muted">本月需準備現金</span>
+                <div id="cash" class="val">$0</div>
+              </div>
+              <div>
+                <span class="muted">本月總消費</span>
+                <div id="consume" class="val">$0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="remindersCard" class="card">
+          <h2>近期提醒</h2>
+          <div id="reminders" class="muted">目前沒有提醒</div>
+        </div>
+        <div id="calendarCard" class="card">
+          <div class="top">
+            <h2 style="margin: 0">Google 行事曆</h2>
+            <span id="gcalStatus" class="badge">免設定</span>
+          </div>
+          <div class="muted" style="margin: 7px 0">
+            建立支出或臨時帳本時勾選，會開啟已填好內容的 Google
+            行事曆；按「儲存」即可加入。
+          </div>
+          <div id="calendarUpcoming" class="calendar-upcoming muted">
+            未來 14 天沒有已加入的行程
+          </div>
+        </div>
+        <div id="prepaidHomeCard" class="card" hidden>
+          <div class="top"><h2 style="margin:0">預繳帳戶</h2><button type="button" onclick="generic('預繳帳戶')">查看</button></div>
+          <div id="prepaidHome"></div>
+        </div>
+        <div id="tempHomeCard" class="card" hidden>
+          <h2>臨時帳本 <span class="muted">（不列入正式記帳）</span></h2>
+          <div id="tempHome"></div>
+        </div>
+      </section>
+      <section id="temp" class="screen">
+        <button class="back" onclick="show('home')">← 首頁</button>
+        <h1>臨時帳本</h1>
+        <button class="primary" onclick="openBookModal()">
+          ＋ 建立臨時帳本
+        </button>
+        <h2 id="activeBooksTitle" style="margin: 18px 0 8px" hidden>使用中的帳本</h2>
+        <div id="books"></div>
+        <div class="notice">
+          臨時帳本完全獨立，不列入正式記帳統計。其他成員付款一律視為現金；只有「我」支付時才選現金或信用卡。
+        </div>
+      </section>
+      <section id="detail" class="screen">
+        <button class="back" onclick="show('temp')">← 臨時帳本</button>
+        <h1 id="bookTitle"></h1>
+        <div id="bookMeta" class="muted"></div>
+        <div class="tabs">
+          <button class="active" onclick="detail()">明細</button
+          ><button onclick="settle()">成員結算</button
+          ><button onclick="overview()">總覽</button>
+        </div>
+        <div class="card">
+          <span class="muted">總支出</span>
+          <div id="bookTotal" class="val">$0</div>
+        </div>
+        <button class="primary" onclick="openTempEntry()">＋ 新增支出</button>
+        <div id="detailBody"></div>
+        <button
+          class="secondary"
+          style="margin-top: 10px"
+          onclick="deleteBook()"
+        >
+          刪除此臨時帳本
+        </button>
+      </section>
+      <section id="generic" class="screen">
+        <button class="back" onclick="show('home')">← 首頁</button>
+        <h1 id="gtitle"></h1>
+        <div class="card muted" id="gtext"></div>
+        <div id="genericList"></div>
+      </section>
+    </main>
+    <div id="expenseM" class="modal">
+      <div class="sheet">
+        <h2>新增正式支出</h2>
+        <div class="row">
+          <div class="field">
+            <label>日期</label><input id="edate" type="date" />
+          </div>
+          <div class="field">
+            <label>時間</label><input id="etime" type="time" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>分類</label
+            ><select id="ecat"></select>
+          </div>
+          <div class="field"><label>項目</label><input id="eitem" /></div>
+        </div>
+        <div class="field">
+          <label>地點</label>
+          <div class="managed-location-row">
+            <button type="button" aria-label="在 Google 地圖開啟" title="Google 地圖" onclick="openLocationMap('elocation')">📍</button>
+            <input id="elocation" list="locationOptions" placeholder="輸入或選擇地點" />
+            <button type="button" aria-label="加入常用地點" title="加入常用地點" onclick="saveLocation('elocation')">＋</button>
+            <button type="button" aria-label="移除常用地點" title="移除常用地點" onclick="deleteLocation('elocation')">－</button>
+          </div>
+          <datalist id="locationOptions"></datalist>
+        </div>
+        <div class="row payment-row">
+          <div class="field">
+            <label>總金額</label><input id="eamt" type="number" />
+          </div>
+          <div id="epaygroup" class="payment-method-group">
+            <div class="field">
+              <label>付款方式</label
+              ><select id="epay" onchange="cardToggle()">
+                <option>現金</option>
+                <option>信用卡</option>
+                <option>複合</option>
+                <option>貨到付款</option>
+                <option>預繳帳戶</option>
+              </select>
+            </div>
+            <div id="ecardbox" class="field payment-bank hide">
+              <label>銀行</label><select id="ecard"><option>國泰</option><option>星展</option><option>台新</option></select>
+            </div>
+          </div>
+        </div>
+        <div id="emixedbox" class="hide">
+          <div class="row">
+            <div class="field"><label>付款方式 1</label><select id="emixpay1"><option>現金</option><option>信用卡－國泰</option><option>信用卡－星展</option><option>信用卡－台新</option><option>貨到付款</option></select></div>
+            <div class="field"><label>金額 1</label><input id="emixamt1" type="number" /></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>付款方式 2</label><select id="emixpay2"><option>貨到付款</option><option>現金</option><option>信用卡－國泰</option><option>信用卡－星展</option><option>信用卡－台新</option></select></div>
+            <div class="field"><label>金額 2</label><input id="emixamt2" type="number" /></div>
+          </div>
+        </div>
+        <div id="eprepaidbox" class="field hide">
+          <label>預繳帳戶</label>
+          <div class="prepaid-select-row">
+            <select id="eprepaid" onchange="showPrepaidBalance('eprepaid','eprepaidBalance')"></select>
+            <button type="button" aria-label="建立預繳帳戶" title="建立預繳帳戶" onclick="createPrepaidAccount('eprepaid')">＋</button>
+            <button type="button" aria-label="停用預繳帳戶" title="停用預繳帳戶" onclick="deactivatePrepaidAccount('eprepaid')">－</button>
+          </div>
+          <div id="eprepaidBalance" class="muted"></div>
+        </div>
+        <label class="check"
+          ><input id="ecalendar" type="checkbox" /> 儲存後開啟 Google
+          行事曆</label
+        ><label class="check"
+          ><input id="proxy" type="checkbox" onchange="proxyToggle()" />
+          含代付款（我先付款，之後會向他人收款）</label
+        >
+        <div id="proxybox" class="hide">
+          <div class="row">
+            <div class="field">
+              <label>代付對象</label
+              ><select id="person" onchange="personToggle()">
+                <option>玫均</option>
+                <option>朋友A</option>
+                <option>朋友B</option>
+                <option value="_">其他／自行輸入</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>代付金額</label><input id="pamt" type="number" />
+            </div>
+          </div>
+          <div id="otherbox" class="field hide">
+            <label>自行輸入</label><input id="other" />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>已收金額</label><input id="recv" type="number" value="0" />
+            </div>
+            <div class="field">
+              <label>預計收款日</label><input id="rdate" type="date" />
+            </div>
+          </div>
+        </div>
+        <div class="photo-attachment-card">
+          <div class="photo-attachment-head"><b>📷 照片（附件）</b><span id="ephotoCount" class="photo-attachment-count">0 張</span></div>
+          <div class="photo-attachment-actions">
+            <button type="button" onclick="$('ephotoCamera').click()">📷 拍照</button>
+            <button type="button" onclick="$('ephotoFiles').click()">📁 選擇照片</button>
+          </div>
+          <input id="ephotoCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handlePhotoSelection('formal',this.files)" />
+          <input id="ephotoFiles" class="hide" type="file" accept="image/*" multiple onchange="handlePhotoSelection('formal',this.files)" />
+          <div id="ephotoPreview" class="photo-preview-grid"></div>
+          <div class="muted" style="margin-top:8px">只加照片也可先儲存為「待補記帳」；照片可個別刪除。</div>
+        </div>
+        <div class="row">
+          <button class="secondary" onclick="closeM('expenseM')">取消</button
+          ><button class="primary" onclick="saveExpense()">儲存</button>
+        </div>
+      </div>
+    </div>
+    <div id="bookM" class="modal">
+      <div class="sheet">
+        <h2>建立臨時帳本</h2>
+        <div class="field">
+          <label>名稱</label
+          ><input id="bname" placeholder="2026 台南三天兩夜" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>開始日期</label><input id="bstart" type="date" />
+          </div>
+          <div class="field">
+            <label>開始時間（選填）</label><input id="bstarttime" type="time" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>結束日期</label><input id="bend" type="date" />
+          </div>
+          <div class="field">
+            <label>結束時間（選填）</label><input id="bendtime" type="time" />
+          </div>
+        </div>
+        <div class="field">
+          <label>地點（選填）</label>
+          <div class="managed-location-row">
+            <button type="button" aria-label="在 Google 地圖開啟" title="Google 地圖" onclick="openLocationMap('blocation')">📍</button>
+            <input id="blocation" list="locationOptions" placeholder="輸入或選擇地點" />
+            <button type="button" aria-label="加入常用地點" title="加入常用地點" onclick="saveLocation('blocation')">＋</button>
+            <button type="button" aria-label="移除常用地點" title="移除常用地點" onclick="deleteLocation('blocation')">－</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>成員（輸入或選擇常用成員）</label>
+          <div class="managed-common-row">
+            <input id="bmembers" list="memberGroupOptions" placeholder="我, 玫均, 小美" />
+            <button type="button" aria-label="加入常用成員" title="加入常用成員" onclick="saveMemberGroup()">＋</button>
+            <button type="button" aria-label="移除常用成員" title="移除常用成員" onclick="deleteMemberGroup()">－</button>
+          </div>
+          <datalist id="memberGroupOptions"></datalist>
+        </div>
+        <label class="check"
+          ><input id="bcalendar" type="checkbox" /> 建立後開啟 Google
+          行事曆</label
+        >
+        <div class="row">
+          <button class="secondary" onclick="closeM('bookM')">取消</button
+          ><button class="primary" onclick="saveBook()">建立</button>
+        </div>
+      </div>
+    </div>
+    <div id="entryM" class="modal">
+      <div class="sheet">
+        <h2>臨時帳本－新增支出</h2>
+        <div class="row">
+          <div class="field">
+            <label>日期</label><input id="tdate" type="date" />
+          </div>
+          <div class="field">
+            <label>時間</label><input id="ttime" type="time" />
+          </div>
+        </div>
+        <div class="field"><label>項目</label><input id="titem" /></div>
+        <div class="row payment-row">
+          <div class="field">
+            <label>總金額</label><input id="tamt" type="number" />
+          </div>
+          <div id="mypay" class="payment-method-group">
+            <div class="field">
+              <label>付款方式</label
+              ><select id="tpay" onchange="tempPaymentToggle()">
+                <option>現金</option>
+                <option>信用卡</option>
+                <option>複合</option>
+                <option>貨到付款</option>
+              </select>
+            </div>
+            <div id="tcardbox" class="field payment-bank hide">
+              <label>銀行</label><select id="tcard"><option>國泰</option><option>星展</option><option>台新</option></select>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>誰支付</label
+          ><select id="payer" onchange="payerToggle()"></select>
+        </div>
+        <div id="tmixed" class="hide">
+          <div class="row">
+            <div class="field"><label>付款方式 1</label><select id="tmixpay1"><option>現金</option><option>信用卡－國泰</option><option>信用卡－星展</option><option>信用卡－台新</option><option>貨到付款</option></select></div>
+            <div class="field"><label>金額 1</label><input id="tmixamt1" type="number" min="0" /></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>付款方式 2</label><select id="tmixpay2"><option>貨到付款</option><option>現金</option><option>信用卡－國泰</option><option>信用卡－星展</option><option>信用卡－台新</option></select></div>
+            <div class="field"><label>金額 2</label><input id="tmixamt2" type="number" min="0" /></div>
+          </div>
+        </div>
+        <div class="field">
+          <div class="share-head"><label>分攤對象</label><div class="share-tools"><button type="button" class="clear-shares" onclick="clearAllShares()">清除</button></div></div>
+          <div id="shares" class="share-options"></div>
+        </div>
+        <div class="field">
+          <label>分攤方式</label
+          ><select id="mode" onchange="customShares()">
+            <option value="equal">勾選成員平均分攤</option>
+            <option value="custom">自訂每人金額</option>
+          </select>
+        </div>
+        <div id="custom"></div>
+        <div class="photo-attachment-card">
+          <div class="photo-attachment-head"><b>📷 照片（附件）</b><span id="tphotoCount" class="photo-attachment-count">0 張</span></div>
+          <div class="photo-attachment-actions">
+            <button type="button" onclick="$('tphotoCamera').click()">📷 拍照</button>
+            <button type="button" onclick="$('tphotoFiles').click()">📁 選擇照片</button>
+          </div>
+          <input id="tphotoCamera" class="hide" type="file" accept="image/*" capture="environment" onchange="handlePhotoSelection('temp',this.files)" />
+          <input id="tphotoFiles" class="hide" type="file" accept="image/*" multiple onchange="handlePhotoSelection('temp',this.files)" />
+          <div id="tphotoPreview" class="photo-preview-grid"></div>
+          <div class="muted" style="margin-top:8px">只加照片也可先儲存為「待補記帳」；照片可個別刪除。</div>
+        </div>
+        <div class="row">
+          <button class="secondary" onclick="closeM('entryM')">取消</button
+          ><button class="primary" onclick="saveEntry()">儲存</button>
+        </div>
+      </div>
+    </div>
+    <div id="importM" class="modal">
+      <div class="sheet">
+        <h2>匯入正式帳本預覽</h2>
+        <div id="preview"></div>
+        <div class="notice">
+          不會只新增一筆淨額。你的原始付款依現金／信用卡拆分；朋友付款只參與分帳。
+        </div>
+        <div class="row">
+          <button class="secondary" onclick="closeM('importM')">取消</button
+          ><button class="primary" onclick="doImport()">確認匯入</button>
+        </div>
+      </div>
+    </div>
+    <div id="backgroundM" class="modal">
+      <div class="sheet crop-sheet">
+        <h2 id="backgroundCropTitle">裁剪背景圖片</h2>
+        <div class="notice" style="margin-bottom:12px">
+          用手指拖曳圖片位置，並使用滑桿放大或縮小。
+        </div>
+        <div class="crop-frame">
+          <canvas id="backgroundCanvas"></canvas>
+        </div>
+        <div class="crop-zoom">
+          <span>縮小</span>
+          <input id="backgroundZoom" type="range" min="1" max="3" step="0.01" value="1" oninput="changeBackgroundZoom(this.value)" />
+          <span>放大</span>
+        </div>
+        <div class="row">
+          <button class="secondary" type="button" onclick="cancelBackgroundCrop()">取消</button>
+          <button class="primary" type="button" onclick="saveBackgroundCrop()">儲存背景</button>
+        </div>
+      </div>
+    </div>
+    <div id="photoViewerM" class="modal">
+      <div class="sheet">
+        <div class="top"><h2 id="photoViewerTitle">照片附件</h2><button type="button" onclick="closePhotoViewer()">關閉</button></div>
+        <div id="photoViewerGrid" class="photo-viewer-grid"></div>
+        <div class="muted" style="margin-top:10px">點照片可放大；右上角 × 可刪除該張照片。</div>
+      </div>
+    </div>
+    <input id="backgroundFile" class="hide" type="file" accept="image/*" onchange="loadBackgroundFile(event)" />
+    <script src="app.js"></script>
+  </body>
+</html>
