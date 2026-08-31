@@ -970,6 +970,253 @@
         border-color: #474153;
       }
 
+
+      /* ===== 總金額計算機 ===== */
+      .amount-input-wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px;
+        gap: 6px;
+        align-items: center;
+      }
+      .amount-calc-button {
+        width: 44px;
+        height: 44px;
+        padding: 0 !important;
+        border: 1px solid #d9d1f5 !important;
+        border-radius: 9px !important;
+        background: #fff !important;
+        color: #7657e8 !important;
+        font-size: 21px;
+        font-weight: 800;
+      }
+      .calculator-sheet {
+        max-width: 430px;
+      }
+      .calculator-display {
+        width: 100%;
+        min-height: 72px;
+        margin: 8px 0 12px;
+        padding: 12px;
+        border: 1px solid #dcd7e9;
+        border-radius: 12px;
+        background: #fff;
+        text-align: right;
+        overflow-wrap: anywhere;
+      }
+      .calculator-expression {
+        min-height: 20px;
+        color: #77758a;
+        font-size: 14px;
+      }
+      .calculator-value {
+        margin-top: 4px;
+        font-size: 28px;
+        font-weight: 800;
+      }
+      .calculator-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .calculator-key {
+        min-height: 52px;
+        border: 1px solid #d9d1f5 !important;
+        border-radius: 11px !important;
+        background: #fff !important;
+        color: inherit !important;
+        font-size: 20px;
+        font-weight: 750;
+      }
+      .calculator-key.operator {
+        color: #7657e8 !important;
+        background: #f2eeff !important;
+      }
+      .calculator-key.danger {
+        color: #c9475b !important;
+        background: #fff4f6 !important;
+      }
+      .calculator-use {
+        margin-top: 10px;
+        min-height: 48px;
+        width: 100%;
+        border-radius: 11px !important;
+        background: #7657e8 !important;
+        color: #fff !important;
+        font-weight: 800;
+        font-size: 16px;
+      }
+      body[data-theme="dark"] .amount-calc-button,
+      body[data-theme="dark"] .calculator-display,
+      body[data-theme="dark"] .calculator-key {
+        background: #27232f !important;
+        border-color: #574f66 !important;
+        color: #f5f2ff !important;
+      }
+      body[data-theme="dark"] .calculator-key.operator {
+        background: #403657 !important;
+        color: #c5b7ff !important;
+      }
+
+
+      /* ===== 2026-09 改版：側邊管理頁 / 消費圓餅圖 ===== */
+      .side-direct-link {
+        width: calc(100% - 24px);
+        margin: 12px;
+        min-height: 46px;
+        text-align: left;
+        font-weight: 800;
+      }
+      .manage-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: end;
+      }
+      .manage-toolbar .field { margin: 0; min-width: 0; }
+      .manage-toolbar button { min-height: 44px; white-space: nowrap; }
+      .manage-card-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .manage-card-title h2 { margin: 0; }
+      .manage-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .manage-danger {
+        color: #c9475b !important;
+        border-color: #efc5cc !important;
+        background: #fff7f8 !important;
+      }
+      .manage-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .manage-list-button {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        text-align: left;
+        margin-top: 7px;
+      }
+      .small-category-row,
+      .analysis-category-row,
+      .analysis-item-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line, #ece9f3);
+      }
+      .small-category-row:last-child,
+      .analysis-category-row:last-child,
+      .analysis-item-row:last-child { border-bottom: 0; }
+
+      .analysis-month-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+      .analysis-total {
+        text-align: center;
+        padding: 6px 0 2px;
+      }
+      .analysis-total .amount {
+        font-size: 30px;
+        font-weight: 850;
+        margin-top: 4px;
+      }
+      .pie-layout {
+        display: grid;
+        grid-template-columns: minmax(160px, 210px) minmax(0, 1fr);
+        gap: 14px;
+        align-items: center;
+      }
+      .pie-chart-wrap {
+        display: grid;
+        place-items: center;
+      }
+      .pie-chart {
+        width: min(58vw, 210px);
+        aspect-ratio: 1 / 1;
+        border-radius: 50%;
+        position: relative;
+      }
+      .pie-chart::after {
+        content: "";
+        position: absolute;
+        inset: 31%;
+        border-radius: 50%;
+        background: var(--card, #fff);
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+      }
+      .pie-center {
+        position: absolute;
+        z-index: 2;
+        inset: 31%;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        pointer-events: none;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .analysis-category-row {
+        grid-template-columns: 12px minmax(0, 1fr) auto;
+        cursor: pointer;
+      }
+      .analysis-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .analysis-category-row button,
+      .analysis-item-row button {
+        all: unset;
+        cursor: pointer;
+        min-width: 0;
+      }
+      .analysis-category-name,
+      .analysis-item-name {
+        font-weight: 750;
+      }
+      .analysis-category-meta,
+      .analysis-item-meta {
+        color: #77758a;
+        font-size: 13px;
+        margin-top: 2px;
+      }
+      .analysis-drill-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .analysis-back {
+        min-height: 38px;
+        padding: 6px 10px !important;
+      }
+      @media (max-width: 520px) {
+        .pie-layout { grid-template-columns: 1fr; }
+        .pie-chart { width: min(62vw, 220px); }
+        .manage-grid { grid-template-columns: 1fr; }
+      }
+      body[data-theme="dark"] .manage-danger {
+        background: #422c33 !important;
+        border-color: #6b4650 !important;
+      }
+      body[data-theme="dark"] .pie-chart::after {
+        background: #302c3a;
+      }
+
     </style>
   </head>
   <body>
@@ -981,23 +1228,23 @@
         <button class="side-close" type="button" aria-label="關閉側邊選單" onclick="closeSideMenu()">×</button>
       </div>
 
-      <div class="side-group open">
+      <div class="side-group">
         <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
-          <span>記帳功能</span><span class="chev">⌄</span>
+          <span>帳戶管理</span><span class="chev">⌄</span>
         </button>
         <div class="side-group-body">
-          <button class="side-link" type="button" onclick="sideGoGeneric('最近')">最近</button>
-          <button class="side-link" type="button" onclick="sideGoGeneric('搜尋')">搜尋</button>
-          <button class="side-link" type="button" onclick="sideShow('temp')">臨時帳本</button>
+          <button class="side-link" type="button" onclick="openCashAccountManager()">現金帳戶</button>
+          <button class="side-link" type="button" onclick="openPrepaidAccountManager()">預繳帳戶</button>
         </div>
       </div>
 
       <div class="side-group">
         <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
-          <span>分類管理</span><span class="chev">⌄</span>
+          <span>資料維護</span><span class="chev">⌄</span>
         </button>
         <div class="side-group-body">
-          <button class="side-link" type="button" onclick="sideGoGeneric('分類')">分類</button>
+          <button class="side-link" type="button" onclick="openCategoryManagerV2()">分類管理</button>
+          <button class="side-link" type="button" onclick="openCreditCardManagerV2()">信用卡管理</button>
         </div>
       </div>
 
@@ -1006,24 +1253,12 @@
           <span>個人化設定</span><span class="chev">⌄</span>
         </button>
         <div class="side-group-body">
-          <button class="side-link" type="button" onclick="sideGoGeneric('背景')">背景</button>
+          <button class="side-link" type="button" onclick="sideGoGeneric('背景')">背景設定</button>
+          <button class="side-link" type="button" onclick="openShortcutSettings()">首頁快捷鍵</button>
         </div>
       </div>
 
-      <div class="side-group">
-        <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
-          <span>首頁快捷鍵</span><span class="chev">⌄</span>
-        </button>
-        <div class="side-group-body">
-          <div class="shortcut-setting-count" id="shortcutSettingCount">最多可顯示 5 個</div>
-          <label class="shortcut-setting-row"><span>最近</span><input type="checkbox" data-shortcut="最近" onchange="updateShortcutSetting(this)"></label>
-          <label class="shortcut-setting-row"><span>搜尋</span><input type="checkbox" data-shortcut="搜尋" onchange="updateShortcutSetting(this)"></label>
-          <label class="shortcut-setting-row"><span>臨時帳本</span><input type="checkbox" data-shortcut="臨時帳本" onchange="updateShortcutSetting(this)"></label>
-          <label class="shortcut-setting-row"><span>分類</span><input type="checkbox" data-shortcut="分類" onchange="updateShortcutSetting(this)"></label>
-          <label class="shortcut-setting-row"><span>背景</span><input type="checkbox" data-shortcut="背景" onchange="updateShortcutSetting(this)"></label>
-          <div class="side-subnote">勾選後會顯示在首頁標題下方，最多 5 個；取消勾選即可移除。</div>
-        </div>
-      </div>
+      <button class="side-link side-direct-link" type="button" onclick="sideGoGeneric('搜尋')">🔍 搜尋</button>
     </aside>
 
     <main class="app">
@@ -1184,7 +1419,11 @@
         </div>
         <div class="row payment-row">
           <div class="field">
-            <label>總金額</label><input id="eamt" type="number" />
+            <label>總金額</label>
+              <div class="amount-input-wrap">
+                <input id="eamt" type="number" />
+                <button class="amount-calc-button" type="button" aria-label="開啟計算機" title="計算機" onclick="openAmountCalculator()">🧮</button>
+              </div>
           </div>
           <div id="epaygroup" class="payment-method-group">
             <div class="field">
@@ -1410,6 +1649,48 @@
         </div>
       </div>
     </div>
+
+    <div id="calculatorM" class="modal">
+      <div class="sheet calculator-sheet">
+        <div class="sheet-title-row">
+          <h2>計算總金額</h2>
+          <div class="sheet-title-actions">
+            <button class="sheet-title-action" type="button" onclick="closeAmountCalculator()">取消</button>
+          </div>
+        </div>
+        <div class="calculator-display" aria-live="polite">
+          <div id="calculatorExpression" class="calculator-expression"></div>
+          <div id="calculatorValue" class="calculator-value">0</div>
+        </div>
+        <div class="calculator-grid">
+          <button class="calculator-key danger" type="button" onclick="calcClear()">AC</button>
+          <button class="calculator-key" type="button" onclick="calcBackspace()">⌫</button>
+          <button class="calculator-key operator" type="button" onclick="calcInput('÷')">÷</button>
+          <button class="calculator-key operator" type="button" onclick="calcInput('×')">×</button>
+
+          <button class="calculator-key" type="button" onclick="calcInput('7')">7</button>
+          <button class="calculator-key" type="button" onclick="calcInput('8')">8</button>
+          <button class="calculator-key" type="button" onclick="calcInput('9')">9</button>
+          <button class="calculator-key operator" type="button" onclick="calcInput('-')">−</button>
+
+          <button class="calculator-key" type="button" onclick="calcInput('4')">4</button>
+          <button class="calculator-key" type="button" onclick="calcInput('5')">5</button>
+          <button class="calculator-key" type="button" onclick="calcInput('6')">6</button>
+          <button class="calculator-key operator" type="button" onclick="calcInput('+')">＋</button>
+
+          <button class="calculator-key" type="button" onclick="calcInput('1')">1</button>
+          <button class="calculator-key" type="button" onclick="calcInput('2')">2</button>
+          <button class="calculator-key" type="button" onclick="calcInput('3')">3</button>
+          <button class="calculator-key operator" type="button" onclick="calcEquals()">＝</button>
+
+          <button class="calculator-key" style="grid-column: span 2" type="button" onclick="calcInput('0')">0</button>
+          <button class="calculator-key" type="button" onclick="calcInput('.')">.</button>
+          <button class="calculator-key" type="button" onclick="calcInput('00')">00</button>
+        </div>
+        <button class="calculator-use" type="button" onclick="useCalculatorAmount()">帶入總金額</button>
+      </div>
+    </div>
+
     <div id="backgroundM" class="modal">
       <div class="sheet crop-sheet">
         <h2 id="backgroundCropTitle">裁剪背景圖片</h2>
@@ -1450,15 +1731,19 @@
     <script>
       (function () {
         const SHORTCUT_KEY = "dailyExpenseHomeShortcutsV1";
-        const DEFAULT_SHORTCUTS = ["最近", "搜尋", "臨時帳本"];
         const ALL_SHORTCUTS = ["最近", "搜尋", "臨時帳本", "分類", "背景"];
+        const PIE_COLORS = [
+          "#7756e8", "#ea6f8e", "#57a5d8", "#f3aa4e", "#5fbf8f",
+          "#9b7ed8", "#e0844e", "#6ab8b0", "#c06c9b", "#8d98a8",
+          "#c6a84f", "#6f8fd1"
+        ];
 
         window.openSideMenu = function () {
           const p = document.getElementById("sidePanel");
           const m = document.getElementById("sideMask");
           if (p) p.classList.add("on");
           if (m) m.classList.add("on");
-          syncShortcutSettingUI();
+          syncShortcutChecks();
         };
 
         window.closeSideMenu = function () {
@@ -1483,14 +1768,12 @@
           if (typeof show === "function") show(name);
         };
 
-        function loadShortcuts() {
+        function getShortcuts() {
           try {
             const saved = JSON.parse(localStorage.getItem(SHORTCUT_KEY) || "null");
-            if (Array.isArray(saved)) {
-              return saved.filter(x => ALL_SHORTCUTS.includes(x)).slice(0, 5);
-            }
+            if (Array.isArray(saved)) return saved.filter(x => ALL_SHORTCUTS.includes(x)).slice(0, 5);
           } catch (e) {}
-          return DEFAULT_SHORTCUTS.slice();
+          return ["最近", "搜尋", "臨時帳本"];
         }
 
         function saveShortcuts(list) {
@@ -1498,43 +1781,39 @@
         }
 
         function shortcutAction(name) {
-          if (name === "臨時帳本") {
-            if (typeof show === "function") show("temp");
-            return;
-          }
-          if (typeof generic === "function") generic(name);
+          if (name === "臨時帳本") sideShow("temp");
+          else sideGoGeneric(name);
         }
 
-        function renderShortcuts() {
+        function renderShortcutNav() {
           const box = document.getElementById("shortcutNav");
           if (!box) return;
-          const list = loadShortcuts();
-          box.innerHTML = "";
+          const list = getShortcuts();
+          box.replaceChildren();
           if (!list.length) {
             const empty = document.createElement("div");
             empty.className = "shortcut-empty";
-            empty.textContent = "可從 ☰ → 首頁快捷鍵 加入常用功能";
+            empty.textContent = "可從個人化設定加入首頁快捷鍵";
             box.appendChild(empty);
-          } else {
-            list.forEach(name => {
-              const b = document.createElement("button");
-              b.type = "button";
-              b.textContent = name;
-              b.addEventListener("click", () => shortcutAction(name));
-              box.appendChild(b);
-            });
+            return;
           }
-          syncShortcutSettingUI();
+          list.forEach(name => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = name;
+            b.addEventListener("click", () => shortcutAction(name));
+            box.appendChild(b);
+          });
         }
 
         window.updateShortcutSetting = function (input) {
-          let list = loadShortcuts();
+          let list = getShortcuts();
           const name = input.dataset.shortcut;
           if (input.checked) {
             if (!list.includes(name)) {
               if (list.length >= 5) {
                 input.checked = false;
-                alert("首頁快捷鍵最多 5 個。");
+                alert("首頁快捷鍵最多 5 個");
                 return;
               }
               list.push(name);
@@ -1543,27 +1822,705 @@
             list = list.filter(x => x !== name);
           }
           saveShortcuts(list);
-          renderShortcuts();
+          renderShortcutNav();
+          syncShortcutChecks();
+          if (document.getElementById("gtitle")?.textContent === "首頁快捷鍵") renderShortcutSettingsPage();
         };
 
-        window.syncShortcutSettingUI = function () {
-          const list = loadShortcuts();
+        function syncShortcutChecks() {
+          const list = getShortcuts();
           document.querySelectorAll("[data-shortcut]").forEach(input => {
             input.checked = list.includes(input.dataset.shortcut);
           });
           const count = document.getElementById("shortcutSettingCount");
-          if (count) count.textContent = `已選 ${list.length} / 5`;
+          if (count) count.textContent = `已選 ${list.length}／5`;
+        }
+
+        function genericPage(title, desc) {
+          closeSideMenu();
+          if (typeof show === "function") show("generic");
+          const t = document.getElementById("gtitle");
+          const d = document.getElementById("gtext");
+          if (t) t.textContent = title;
+          if (d) d.textContent = desc || "";
+        }
+
+        function persistSafe() {
+          if (typeof persist === "function") persist();
+          else {
+            try { localStorage.setItem("ledger-v2-data", JSON.stringify(D)); } catch (e) {}
+          }
+        }
+
+        function moneyV2(n) {
+          return "$" + Math.round(Number(n) || 0).toLocaleString("zh-TW");
+        }
+
+        function escV2(v) {
+          return String(v ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+        }
+
+        // ===== 首頁快捷鍵設定 =====
+        window.openShortcutSettings = function () {
+          genericPage("首頁快捷鍵", "選擇要顯示在首頁上方的功能，最多 5 個。");
+          renderShortcutSettingsPage();
         };
 
-        document.addEventListener("keydown", e => {
-          if (e.key === "Escape") closeSideMenu();
-        });
+        window.renderShortcutSettingsPage = function () {
+          const list = getShortcuts();
+          const box = document.getElementById("genericList");
+          if (!box) return;
+          box.innerHTML = `
+            <div class="card">
+              <div class="shortcut-setting-count" id="shortcutSettingCount">已選 ${list.length}／5</div>
+              ${ALL_SHORTCUTS.map(name => `
+                <label class="shortcut-setting-row">
+                  <span>${escV2(name)}</span>
+                  <input type="checkbox" data-shortcut="${escV2(name)}"
+                    ${list.includes(name) ? "checked" : ""}
+                    onchange="updateShortcutSetting(this)">
+                </label>`).join("")}
+            </div>`;
+        };
 
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", renderShortcuts);
-        } else {
-          renderShortcuts();
+        // ===== 現金帳戶 =====
+        function ensureCashAccounts() {
+          D.cashAccounts ||= [{ id: 1, name: "現金", openingBalance: 0, adjustment: 0, note: "", active: true }];
         }
+
+        function cashSpentTotal() {
+          return (D.e || []).reduce((sum, entry) => {
+            if (entry?.isCreditCardPayment) return sum + (entry.pay === "現金" ? (+entry.amount || 0) : 0);
+            if (entry.pay === "現金") return sum + (+entry.amount || 0);
+            if (entry.pay === "複合" && Array.isArray(entry.paymentParts)) {
+              return sum + entry.paymentParts
+                .filter(p => p.pay === "現金")
+                .reduce((s, p) => s + (+p.amount || 0), 0);
+            }
+            return sum;
+          }, 0);
+        }
+
+        function cashBalance(account, index) {
+          const opening = +account.openingBalance || 0;
+          const adjustment = +account.adjustment || 0;
+          // 舊版交易沒有現金帳戶 ID，因此只將「全部現金交易」歸到第一個現金帳戶。
+          return opening + adjustment - (index === 0 ? cashSpentTotal() : 0);
+        }
+
+        window.openCashAccountManager = function () {
+          genericPage("現金帳戶", "管理現金帳戶。舊版未指定帳戶的現金交易會歸入第一個現金帳戶計算。");
+          renderCashAccountsV2();
+        };
+
+        window.renderCashAccountsV2 = function () {
+          ensureCashAccounts();
+          const box = document.getElementById("genericList");
+          if (!box) return;
+          box.innerHTML = `
+            <div class="card">
+              <button type="button" onclick="editCashAccountV2()">＋ 新增現金帳戶</button>
+            </div>
+            ${D.cashAccounts.map((a, i) => `
+              <div class="card">
+                <div class="manage-card-title">
+                  <div>
+                    <h2>${escV2(a.name)}</h2>
+                    <div class="muted">目前餘額 ${moneyV2(cashBalance(a, i))}</div>
+                  </div>
+                  <div class="manage-actions">
+                    <button type="button" onclick="editCashAccountV2(${a.id})">修改</button>
+                    <button class="manage-danger" type="button" onclick="deleteCashAccountV2(${a.id})">刪除</button>
+                  </div>
+                </div>
+                <div class="item top"><span>期初金額</span><b>${moneyV2(a.openingBalance)}</b></div>
+                <div class="item top"><span>手動調整</span><b>${moneyV2(a.adjustment)}</b></div>
+                ${a.note ? `<div class="item"><span class="muted">${escV2(a.note)}</span></div>` : ""}
+              </div>`).join("")}
+          `;
+        };
+
+        window.editCashAccountV2 = function (id) {
+          ensureCashAccounts();
+          const a = D.cashAccounts.find(x => String(x.id) === String(id));
+          const name = prompt("現金帳戶名稱", a?.name || "");
+          if (!name?.trim()) return;
+          const opening = Number(prompt("期初金額", String(a?.openingBalance ?? 0)));
+          if (!Number.isFinite(opening)) return alert("期初金額格式不正確");
+          const adjustment = Number(prompt("手動調整金額（沒有就填 0）", String(a?.adjustment ?? 0)));
+          if (!Number.isFinite(adjustment)) return alert("調整金額格式不正確");
+          const note = prompt("備註", a?.note || "") || "";
+          if (a) Object.assign(a, { name: name.trim(), openingBalance: opening, adjustment, note });
+          else D.cashAccounts.push({ id: Date.now(), name: name.trim(), openingBalance: opening, adjustment, note, active: true });
+          persistSafe();
+          renderCashAccountsV2();
+        };
+
+        window.deleteCashAccountV2 = function (id) {
+          ensureCashAccounts();
+          if (D.cashAccounts.length <= 1) return alert("至少保留一個現金帳戶");
+          const a = D.cashAccounts.find(x => x.id === id);
+          if (!a || !confirm(`確定刪除「${a.name}」？`)) return;
+          D.cashAccounts = D.cashAccounts.filter(x => x.id !== id);
+          persistSafe();
+          renderCashAccountsV2();
+        };
+
+        // ===== 預繳帳戶 =====
+        window.openPrepaidAccountManager = function () {
+          genericPage("預繳帳戶", "查看餘額、加值紀錄，並可新增或刪除帳戶。");
+          renderPrepaidAccountsV2();
+        };
+
+        window.renderPrepaidAccountsV2 = function () {
+          D.prepaid ||= [];
+          const box = document.getElementById("genericList");
+          if (!box) return;
+          const options = D.prepaid.map(a => `<option value="${a.id}">${escV2(a.name)}</option>`).join("");
+          box.innerHTML = `
+            <div class="card">
+              <div class="manage-toolbar">
+                <div class="field">
+                  <label>預繳帳戶</label>
+                  <select id="prepaidManagerSelect" onchange="showPrepaidAccountDetailV2(this.value)">
+                    <option value="">請選擇帳戶</option>${options}
+                  </select>
+                </div>
+                <button type="button" onclick="createPrepaidAccount(); setTimeout(renderPrepaidAccountsV2,0)">＋ 新增</button>
+              </div>
+            </div>
+            <div id="prepaidManagerDetail"></div>`;
+          if (D.prepaid[0]) {
+            document.getElementById("prepaidManagerSelect").value = String(D.prepaid[0].id);
+            showPrepaidAccountDetailV2(D.prepaid[0].id);
+          }
+        };
+
+        window.showPrepaidAccountDetailV2 = function (id) {
+          const a = D.prepaid.find(x => String(x.id) === String(id));
+          const box = document.getElementById("prepaidManagerDetail");
+          if (!box) return;
+          if (!a) { box.innerHTML = '<div class="card muted">請先選擇預繳帳戶</div>'; return; }
+          box.innerHTML = `
+            <div class="card">
+              <div class="manage-card-title">
+                <div>
+                  <h2>${escV2(a.name)}</h2>
+                  <div class="muted">${a.active === false ? "已停用" : "使用中"}</div>
+                </div>
+                <div class="manage-actions">
+                  <button type="button" onclick="topupPrepaidAccount(${a.id}); setTimeout(renderPrepaidAccountsV2,0)">＋ 加值</button>
+                  <button class="manage-danger" type="button" onclick="deletePrepaidAccountV2(${a.id})">刪除</button>
+                </div>
+              </div>
+              <div class="item top"><span>目前餘額</span><b>${moneyV2(a.balance)}</b></div>
+              <h3>加值／消費紀錄</h3>
+              ${(a.transactions || []).slice().reverse().map(tx => `
+                <div class="item top">
+                  <span>${escV2(tx.date || "")}｜${escV2(tx.note || tx.type || "")}</span>
+                  <b>${(+tx.amount || 0) >= 0 ? "+" : ""}${moneyV2(tx.amount)}</b>
+                </div>`).join("") || '<div class="muted">尚無紀錄</div>'}
+            </div>`;
+        };
+
+        window.deletePrepaidAccountV2 = function (id) {
+          const a = D.prepaid.find(x => x.id === id);
+          if (!a || !confirm(`確定刪除「${a.name}」？既有記帳紀錄不會被刪除。`)) return;
+          D.prepaid = D.prepaid.filter(x => x.id !== id);
+          persistSafe();
+          if (typeof renderPrepaidSelect === "function") renderPrepaidSelect("eprepaid");
+          renderPrepaidAccountsV2();
+        };
+
+        // ===== 分類管理：大分類 -> 小分類 =====
+        function ensureCategoryItems() {
+          D.cats ||= [];
+          D.catItems ||= {};
+          D.cats.forEach(cat => { if (!Array.isArray(D.catItems[cat])) D.catItems[cat] = []; });
+          // 將既有記帳中的項目整理進對應大分類，避免升級後看不到舊資料。
+          (D.e || []).forEach(entry => {
+            const cat = entry.cat || "未分類";
+            const item = (entry.item || "").trim();
+            if (!D.cats.includes(cat)) D.cats.push(cat);
+            D.catItems[cat] ||= [];
+            if (item && !D.catItems[cat].includes(item)) D.catItems[cat].push(item);
+          });
+        }
+
+        window.openCategoryManagerV2 = function () {
+          genericPage("分類管理", "先選大分類，再管理此分類中的項目（小分類）。");
+          renderCategoryManagerV2();
+        };
+
+        window.renderCategoryManagerV2 = function (selectedCat) {
+          ensureCategoryItems();
+          const cat = selectedCat && D.cats.includes(selectedCat) ? selectedCat : (D.cats[0] || "");
+          const box = document.getElementById("genericList");
+          if (!box) return;
+          box.innerHTML = `
+            <div class="card">
+              <div class="manage-toolbar">
+                <div class="field">
+                  <label>大分類</label>
+                  <select id="categoryManagerSelect" onchange="renderCategoryItemsV2(this.value)">
+                    ${D.cats.map(c => `<option value="${escV2(c)}" ${c === cat ? "selected" : ""}>${escV2(c)}</option>`).join("")}
+                  </select>
+                </div>
+                <button type="button" onclick="addBigCategoryV2()">＋ 新增</button>
+              </div>
+              <div class="manage-actions" style="margin-top:8px">
+                <button class="manage-danger" type="button" onclick="deleteBigCategoryV2()">刪除目前大分類</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="manage-card-title">
+                <h2 id="categoryItemsTitle">${escV2(cat || "尚無大分類")}</h2>
+                <button type="button" onclick="addSmallCategoryV2()">＋ 新增項目</button>
+              </div>
+              <div id="categoryItemsList"></div>
+            </div>`;
+          renderCategoryItemsV2(cat);
+        };
+
+        window.renderCategoryItemsV2 = function (cat) {
+          ensureCategoryItems();
+          const select = document.getElementById("categoryManagerSelect");
+          if (select && cat) select.value = cat;
+          const title = document.getElementById("categoryItemsTitle");
+          if (title) title.textContent = cat || "尚無大分類";
+          const list = document.getElementById("categoryItemsList");
+          if (!list) return;
+          const items = D.catItems[cat] || [];
+          list.innerHTML = items.map((item, index) => `
+            <div class="small-category-row">
+              <span>${escV2(item)}</span>
+              <span></span>
+              <button class="manage-danger" type="button"
+                onclick="deleteSmallCategoryV2('${encodeURIComponent(cat)}',${index})">刪除</button>
+            </div>`).join("") || '<div class="muted" style="padding:12px 0">此大分類尚無項目</div>';
+        };
+
+        window.addBigCategoryV2 = function () {
+          ensureCategoryItems();
+          const name = prompt("新增大分類名稱");
+          if (!name?.trim()) return;
+          const clean = name.trim();
+          if (D.cats.includes(clean)) return alert("這個大分類已存在");
+          D.cats.push(clean);
+          D.catItems[clean] = [];
+          persistSafe();
+          renderCategoryManagerV2(clean);
+        };
+
+        window.deleteBigCategoryV2 = function () {
+          ensureCategoryItems();
+          const select = document.getElementById("categoryManagerSelect");
+          const cat = select?.value;
+          if (!cat) return;
+          if (!confirm(`確定刪除大分類「${cat}」？既有交易紀錄不會被刪除。`)) return;
+          D.cats = D.cats.filter(c => c !== cat);
+          delete D.catItems[cat];
+          persistSafe();
+          renderCategoryManagerV2();
+        };
+
+        window.addSmallCategoryV2 = function () {
+          ensureCategoryItems();
+          const cat = document.getElementById("categoryManagerSelect")?.value;
+          if (!cat) return alert("請先建立或選擇大分類");
+          const name = prompt(`在「${cat}」新增項目`);
+          if (!name?.trim()) return;
+          const clean = name.trim();
+          D.catItems[cat] ||= [];
+          if (D.catItems[cat].includes(clean)) return alert("這個項目已存在");
+          D.catItems[cat].push(clean);
+          persistSafe();
+          renderCategoryItemsV2(cat);
+        };
+
+        window.deleteSmallCategoryV2 = function (encodedCat, index) {
+          const cat = decodeURIComponent(encodedCat);
+          ensureCategoryItems();
+          const item = D.catItems[cat]?.[index];
+          if (!item || !confirm(`確定刪除項目「${item}」？`)) return;
+          D.catItems[cat].splice(index, 1);
+          persistSafe();
+          renderCategoryItemsV2(cat);
+        };
+
+        // ===== 信用卡管理 =====
+        window.openCreditCardManagerV2 = function () {
+          genericPage("信用卡管理", "使用銀行下拉式選單選擇信用卡，點選後顯示完整設定。");
+          renderCreditCardManagerV2();
+        };
+
+        window.renderCreditCardManagerV2 = function (selectedId) {
+          D.cards ||= [];
+          const card = D.cards.find(c => String(c.id) === String(selectedId)) || D.cards[0];
+          const box = document.getElementById("genericList");
+          if (!box) return;
+          box.innerHTML = `
+            <div class="card">
+              <div class="manage-toolbar">
+                <div class="field">
+                  <label>銀行／信用卡</label>
+                  <select id="cardManagerSelect" onchange="showCreditCardDetailV2(this.value)">
+                    <option value="">請選擇</option>
+                    ${D.cards.map(c => `<option value="${c.id}" ${card?.id === c.id ? "selected" : ""}>${escV2(c.name)}</option>`).join("")}
+                  </select>
+                </div>
+                <button type="button" onclick="editCreditCard()">＋ 新增</button>
+              </div>
+            </div>
+            <div id="cardManagerDetail"></div>`;
+          if (card) showCreditCardDetailV2(card.id);
+        };
+
+        window.showCreditCardDetailV2 = function (id) {
+          const card = D.cards.find(c => String(c.id) === String(id));
+          const box = document.getElementById("cardManagerDetail");
+          if (!box) return;
+          if (!card) { box.innerHTML = '<div class="card muted">請先選擇銀行／信用卡</div>'; return; }
+          let amount = typeof currentCardBillAmount === "function" ? currentCardBillAmount(card) : 0;
+          let range = typeof cardBillRange === "function" ? cardBillRange(card) : null;
+          box.innerHTML = `
+            <div class="card">
+              <div class="manage-card-title">
+                <div>
+                  <h2>${escV2(card.name)}</h2>
+                  <div class="muted">${card.active === false ? "已停用" : "使用中"}</div>
+                </div>
+                <div class="manage-actions">
+                  <button type="button" onclick="editCreditCard(${card.id}); setTimeout(()=>renderCreditCardManagerV2(${card.id}),0)">修改</button>
+                  <button class="manage-danger" type="button" onclick="deleteCreditCardV2(${card.id})">刪除</button>
+                </div>
+              </div>
+              <div class="item top"><span>結帳日</span><b>${escV2(card.closeDay || "未設定")} 日</b></div>
+              <div class="item top"><span>帳單產生日</span><b>${escV2(card.statementDay || "未設定")} 日</b></div>
+              <div class="item top"><span>繳款截止日</span><b>${escV2(card.dueDay || "未設定")} 日</b></div>
+              <div class="item top"><span>本期帳單金額${range ? `<span class="muted">（${escV2(range.start)}～${escV2(range.end)}）</span>` : ""}</span><b>${moneyV2(amount)}</b></div>
+            </div>`;
+        };
+
+        window.deleteCreditCardV2 = function (id) {
+          const card = D.cards.find(c => c.id === id);
+          if (!card || !confirm(`確定刪除「${card.name}」？既有交易紀錄不會被刪除。`)) return;
+          D.cards = D.cards.filter(c => c.id !== id);
+          persistSafe();
+          if (typeof renderCreditCardSelect === "function") {
+            renderCreditCardSelect("ecard");
+            renderCreditCardSelect("tcard");
+          }
+          renderCreditCardManagerV2();
+        };
+
+        // ===== 消費分析：月份 + 圓餅圖 + 大分類/小分類 =====
+        function monthOptionsV2() {
+          const months = new Set();
+          const now = new Date();
+          months.add(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
+          (D.e || []).forEach(e => {
+            if (/^\d{4}-\d{2}/.test(e.date || "")) months.add(e.date.slice(0,7));
+          });
+          return [...months].sort().reverse();
+        }
+
+        function analysisEntriesV2(month) {
+          return (D.e || []).filter(e =>
+            e.date?.startsWith(month) &&
+            !e.isCreditCardPayment
+          );
+        }
+
+        function netAmountV2(entry) {
+          return Math.max(0, (+entry.amount || 0) - (+entry.proxy || 0));
+        }
+
+        function categoryTotalsV2(entries) {
+          const totals = {};
+          entries.forEach(e => {
+            const cat = e.cat || "未分類";
+            totals[cat] = (totals[cat] || 0) + netAmountV2(e);
+          });
+          return Object.entries(totals).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]);
+        }
+
+        function pieGradientV2(rows, total) {
+          if (!(total > 0) || !rows.length) return "#e8e5ef";
+          let acc = 0;
+          const stops = [];
+          rows.forEach(([name, value], i) => {
+            const start = acc / total * 100;
+            acc += value;
+            const end = acc / total * 100;
+            const color = PIE_COLORS[i % PIE_COLORS.length];
+            stops.push(`${color} ${start.toFixed(3)}% ${end.toFixed(3)}%`);
+          });
+          return `conic-gradient(${stops.join(",")})`;
+        }
+
+        window.openMonthlyAnalysis = function (month) {
+          genericPage("消費分析", "查看各大分類占本月消費的比例；點分類可往下查看小分類與明細。");
+          const months = monthOptionsV2();
+          const selected = month && months.includes(month) ? month : months[0];
+          renderMonthlyAnalysisV2(selected);
+        };
+
+        window.renderMonthlyAnalysisV2 = function (month) {
+          const months = monthOptionsV2();
+          if (!month || !months.includes(month)) month = months[0];
+          const entries = analysisEntriesV2(month);
+          const rows = categoryTotalsV2(entries);
+          const total = rows.reduce((s, [,v]) => s + v, 0);
+          const gradient = pieGradientV2(rows, total);
+          const box = document.getElementById("genericList");
+          if (!box) return;
+
+          box.innerHTML = `
+            <div class="card">
+              <div class="analysis-month-row">
+                <div class="field" style="margin:0">
+                  <label>月份</label>
+                  <select onchange="renderMonthlyAnalysisV2(this.value)">
+                    ${months.map(m => `<option value="${m}" ${m===month?"selected":""}>${m.replace("-","/")}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+              <div class="analysis-total">
+                <div class="muted">本月消費總額</div>
+                <div class="amount">${moneyV2(total)}</div>
+              </div>
+            </div>
+            <div class="card">
+              <h2>大分類占比</h2>
+              ${rows.length ? `
+                <div class="pie-layout">
+                  <div class="pie-chart-wrap">
+                    <div class="pie-chart" style="background:${gradient}">
+                      <div class="pie-center"><span>共<br>${rows.length} 類</span></div>
+                    </div>
+                  </div>
+                  <div>
+                    ${rows.map(([name, amount], i) => {
+                      const pct = total ? amount / total * 100 : 0;
+                      return `<div class="analysis-category-row" onclick="showAnalysisCategoryV2('${encodeURIComponent(month)}','${encodeURIComponent(name)}')">
+                        <span class="analysis-dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></span>
+                        <button type="button">
+                          <div class="analysis-category-name">${escV2(name)}</div>
+                          <div class="analysis-category-meta">${pct.toFixed(1)}%</div>
+                        </button>
+                        <b>${moneyV2(amount)}</b>
+                      </div>`;
+                    }).join("")}
+                  </div>
+                </div>` : '<div class="muted">這個月份尚無消費資料</div>'}
+            </div>
+            <div id="analysisDrill"></div>`;
+        };
+
+        window.showAnalysisCategoryV2 = function (encodedMonth, encodedCat) {
+          const month = decodeURIComponent(encodedMonth);
+          const cat = decodeURIComponent(encodedCat);
+          const entries = analysisEntriesV2(month).filter(e => (e.cat || "未分類") === cat);
+          const items = {};
+          entries.forEach(e => {
+            const item = e.item || "未填項目";
+            items[item] = (items[item] || 0) + netAmountV2(e);
+          });
+          const rows = Object.entries(items).sort((a,b)=>b[1]-a[1]);
+          const total = rows.reduce((s,[,v])=>s+v,0);
+          const box = document.getElementById("analysisDrill");
+          if (!box) return;
+          box.innerHTML = `
+            <div class="card">
+              <div class="analysis-drill-title">
+                <div>
+                  <h2 style="margin:0">${escV2(cat)}｜小分類</h2>
+                  <div class="muted">${month.replace("-","/")}・${moneyV2(total)}</div>
+                </div>
+                <button class="analysis-back" type="button" onclick="document.getElementById('analysisDrill').innerHTML=''">收合</button>
+              </div>
+              ${rows.map(([item, amount]) => {
+                const pct = total ? amount/total*100 : 0;
+                return `<div class="analysis-item-row">
+                  <button type="button" onclick="showAnalysisItemV2('${encodeURIComponent(month)}','${encodeURIComponent(cat)}','${encodeURIComponent(item)}')">
+                    <div class="analysis-item-name">${escV2(item)}</div>
+                    <div class="analysis-item-meta">${pct.toFixed(1)}%</div>
+                  </button>
+                  <span></span>
+                  <b>${moneyV2(amount)}</b>
+                </div>`;
+              }).join("") || '<div class="muted">尚無小分類資料</div>'}
+              <div id="analysisItemDetail"></div>
+            </div>`;
+          box.scrollIntoView({behavior:"smooth", block:"nearest"});
+        };
+
+        window.showAnalysisItemV2 = function (encodedMonth, encodedCat, encodedItem) {
+          const month = decodeURIComponent(encodedMonth);
+          const cat = decodeURIComponent(encodedCat);
+          const item = decodeURIComponent(encodedItem);
+          const rows = analysisEntriesV2(month)
+            .filter(e => (e.cat || "未分類") === cat && (e.item || "未填項目") === item)
+            .slice().reverse();
+          const box = document.getElementById("analysisItemDetail");
+          if (!box) return;
+          box.innerHTML = `
+            <h3>${escV2(item)}｜消費明細</h3>
+            ${rows.map(e => `<div class="item top">
+              <div>
+                <b>${escV2(e.item || e.cat || "未填項目")}</b>
+                <div class="muted">${escV2(e.date || "")}${e.time ? ` ${escV2(e.time)}` : ""}｜${escV2(e.pay || "未設定")}</div>
+              </div>
+              <b>${moneyV2(netAmountV2(e))}</b>
+            </div>`).join("") || '<div class="muted">尚無明細</div>'}`;
+        };
+
+        // Keep custom pages in sync after existing app CRUD actions.
+        const originalEditCard = window.editCreditCard;
+        if (typeof originalEditCard === "function") {
+          window.editCreditCard = function () {
+            const result = originalEditCard.apply(this, arguments);
+            if (document.getElementById("gtitle")?.textContent === "信用卡管理") {
+              setTimeout(() => renderCreditCardManagerV2(arguments[0]), 0);
+            }
+            return result;
+          };
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+          renderShortcutNav();
+          syncShortcutChecks();
+        });
+        if (document.readyState !== "loading") {
+          renderShortcutNav();
+          syncShortcutChecks();
+        }
+      })();
+    </script>
+
+
+    <script>
+      (function () {
+        let calcExpr = "";
+        let calcResult = null;
+
+        function formatNumber(n) {
+          if (!Number.isFinite(n)) return "0";
+          const rounded = Math.round((n + Number.EPSILON) * 100000000) / 100000000;
+          return String(rounded);
+        }
+
+        function updateCalcDisplay() {
+          const expr = document.getElementById("calculatorExpression");
+          const value = document.getElementById("calculatorValue");
+          if (!expr || !value) return;
+          expr.textContent = calcExpr || "";
+          value.textContent = calcResult !== null ? formatNumber(calcResult) : (calcExpr || "0");
+        }
+
+        function safeEvaluate(expression) {
+          const normalized = expression.replace(/×/g, "*").replace(/÷/g, "/");
+          if (!/^[0-9+\-*/. ()]+$/.test(normalized)) throw new Error("invalid");
+          if (!normalized.trim()) return 0;
+          const value = Function('"use strict"; return (' + normalized + ')')();
+          if (!Number.isFinite(value)) throw new Error("invalid");
+          return value;
+        }
+
+        window.openAmountCalculator = function () {
+          const amount = document.getElementById("eamt");
+          const existing = amount && amount.value ? String(amount.value) : "";
+          calcExpr = existing;
+          calcResult = existing ? Number(existing) : null;
+          const modal = document.getElementById("calculatorM");
+          if (modal) modal.classList.add("on");
+          updateCalcDisplay();
+        };
+
+        window.closeAmountCalculator = function () {
+          const modal = document.getElementById("calculatorM");
+          if (modal) modal.classList.remove("on");
+        };
+
+        window.calcInput = function (token) {
+          if (calcResult !== null && !["+", "-", "×", "÷"].includes(token)) {
+            calcExpr = "";
+            calcResult = null;
+          } else if (calcResult !== null && ["+", "-", "×", "÷"].includes(token)) {
+            calcExpr = formatNumber(calcResult);
+            calcResult = null;
+          }
+
+          const last = calcExpr.slice(-1);
+          const operators = ["+", "-", "×", "÷"];
+
+          if (operators.includes(token)) {
+            if (!calcExpr && token !== "-") return;
+            if (operators.includes(last)) {
+              calcExpr = calcExpr.slice(0, -1) + token;
+            } else {
+              calcExpr += token;
+            }
+          } else if (token === ".") {
+            const current = calcExpr.split(/[+\-×÷]/).pop();
+            if (current.includes(".")) return;
+            calcExpr += current ? "." : "0.";
+          } else {
+            calcExpr += token;
+          }
+          updateCalcDisplay();
+        };
+
+        window.calcClear = function () {
+          calcExpr = "";
+          calcResult = null;
+          updateCalcDisplay();
+        };
+
+        window.calcBackspace = function () {
+          if (calcResult !== null) {
+            calcExpr = formatNumber(calcResult);
+            calcResult = null;
+          }
+          calcExpr = calcExpr.slice(0, -1);
+          updateCalcDisplay();
+        };
+
+        window.calcEquals = function () {
+          try {
+            if (!calcExpr) return;
+            calcResult = safeEvaluate(calcExpr);
+            updateCalcDisplay();
+          } catch (e) {
+            const value = document.getElementById("calculatorValue");
+            if (value) value.textContent = "計算錯誤";
+            calcResult = null;
+          }
+        };
+
+        window.useCalculatorAmount = function () {
+          try {
+            let result = calcResult;
+            if (result === null) result = safeEvaluate(calcExpr);
+            if (!Number.isFinite(result)) throw new Error("invalid");
+            const amount = document.getElementById("eamt");
+            if (amount) {
+              amount.value = formatNumber(result);
+              amount.dispatchEvent(new Event("input", { bubbles: true }));
+              amount.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            closeAmountCalculator();
+          } catch (e) {
+            const value = document.getElementById("calculatorValue");
+            if (value) value.textContent = "計算錯誤";
+          }
+        };
       })();
     </script>
 
