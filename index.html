@@ -1267,6 +1267,81 @@
         background:#422c33 !important; border-color:#6b4650 !important;
       }
 
+    
+      /* ===== 首頁快捷鍵設定：勾選式 3~4 欄 ===== */
+      .shortcut-setting-card { padding: 14px !important; }
+      .shortcut-setting-head {
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom:12px;
+      }
+      .shortcut-setting-count {
+        flex:0 0 auto;
+        margin:0;
+        padding:6px 8px;
+        border-radius:999px;
+        font-size:12px;
+        font-weight:700;
+        background:rgba(118,87,232,.09);
+        color:#7657e8;
+        opacity:1;
+        white-space:nowrap;
+      }
+      .shortcut-option-grid {
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px;
+      }
+      .shortcut-option {
+        display:flex;
+        align-items:center;
+        gap:6px;
+        min-width:0;
+        min-height:46px;
+        padding:8px 7px;
+        border:1px solid rgba(118,87,232,.16);
+        border-radius:10px;
+        background:rgba(255,255,255,.42);
+        cursor:pointer;
+        line-height:1.2;
+      }
+      .shortcut-option.selected {
+        border-color:rgba(118,87,232,.5);
+        background:rgba(118,87,232,.09);
+      }
+      .shortcut-option input {
+        flex:0 0 auto;
+        width:18px;
+        height:18px;
+        margin:0;
+        accent-color:#7657e8;
+      }
+      .shortcut-option span {
+        min-width:0;
+        font-size:12px;
+        font-weight:700;
+        overflow-wrap:anywhere;
+      }
+      @media (min-width:560px) {
+        .shortcut-option-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+        .shortcut-option span { font-size:13px; }
+      }
+      @media (max-width:360px) {
+        .shortcut-option-grid { gap:6px; }
+        .shortcut-option { padding:7px 5px; }
+        .shortcut-option span { font-size:11px; }
+      }
+      body[data-theme="dark"] .shortcut-option {
+        background:rgba(255,255,255,.03);
+        border-color:rgba(190,178,235,.18);
+      }
+      body[data-theme="dark"] .shortcut-option.selected {
+        background:rgba(118,87,232,.16);
+        border-color:rgba(174,156,244,.52);
+      }
+
     </style>
   </head>
   <body>
@@ -1782,7 +1857,7 @@
     <script>
       (function () {
         const SHORTCUT_KEY = "dailyExpenseHomeShortcutsV1";
-        const ALL_SHORTCUTS = ["最近", "搜尋", "臨時帳本", "分類", "背景"];
+        const ALL_SHORTCUTS = ["最近", "全部明細", "搜尋", "臨時帳本", "消費分析", "現金帳戶", "預繳帳戶", "信用卡管理", "分類管理", "背景設定"];
         const PIE_COLORS = [
           "#7756e8", "#ea6f8e", "#57a5d8", "#f3aa4e", "#5fbf8f",
           "#9b7ed8", "#e0844e", "#6ab8b0", "#c06c9b", "#8d98a8",
@@ -1822,9 +1897,12 @@
         function getShortcuts() {
           try {
             const saved = JSON.parse(localStorage.getItem(SHORTCUT_KEY) || "null");
-            if (Array.isArray(saved)) return saved.filter(x => ALL_SHORTCUTS.includes(x)).slice(0, 5);
+            if (Array.isArray(saved)) {
+              const migrated = saved.map(x => x === "分類" ? "分類管理" : x === "背景" ? "背景設定" : x);
+              return migrated.filter(x => ALL_SHORTCUTS.includes(x)).slice(0, 5);
+            }
           } catch (e) {}
-          return ["最近", "搜尋", "臨時帳本"];
+          return ["最近", "全部明細", "搜尋", "臨時帳本", "消費分析"];
         }
 
         function saveShortcuts(list) {
@@ -1832,8 +1910,16 @@
         }
 
         function shortcutAction(name) {
-          if (name === "臨時帳本") sideShow("temp");
-          else sideGoGeneric(name);
+          closeSideMenu();
+          if (name === "臨時帳本") return typeof show === "function" && show("temp");
+          if (name === "全部明細") return typeof openAllDetails === "function" && openAllDetails();
+          if (name === "消費分析") return typeof openMonthlyAnalysis === "function" && openMonthlyAnalysis();
+          if (name === "現金帳戶") return typeof openCashAccountManager === "function" && openCashAccountManager();
+          if (name === "預繳帳戶") return typeof openPrepaidAccountManager === "function" && openPrepaidAccountManager();
+          if (name === "信用卡管理") return typeof openCreditCardManagerV2 === "function" && openCreditCardManagerV2();
+          if (name === "分類管理") return typeof openCategoryManagerV2 === "function" && openCategoryManagerV2();
+          if (name === "背景設定") return typeof generic === "function" && generic("背景");
+          if (typeof generic === "function") generic(name);
         }
 
         function renderShortcutNav() {
@@ -1927,15 +2013,23 @@
           const box = document.getElementById("genericList");
           if (!box) return;
           box.innerHTML = `
-            <div class="card">
-              <div class="shortcut-setting-count" id="shortcutSettingCount">已選 ${list.length}／5</div>
-              ${ALL_SHORTCUTS.map(name => `
-                <label class="shortcut-setting-row">
-                  <span>${escV2(name)}</span>
-                  <input type="checkbox" data-shortcut="${escV2(name)}"
-                    ${list.includes(name) ? "checked" : ""}
-                    onchange="updateShortcutSetting(this)">
-                </label>`).join("")}
+            <div class="card shortcut-setting-card">
+              <div class="shortcut-setting-head">
+                <div>
+                  <h2 style="margin:0">選擇首頁快捷鍵</h2>
+                  <div class="muted">勾選後會顯示在首頁，最多 5 個。</div>
+                </div>
+                <div class="shortcut-setting-count" id="shortcutSettingCount">已選 ${list.length}／5</div>
+              </div>
+              <div class="shortcut-option-grid">
+                ${ALL_SHORTCUTS.map(name => `
+                  <label class="shortcut-option ${list.includes(name) ? "selected" : ""}">
+                    <input type="checkbox" data-shortcut="${escV2(name)}"
+                      ${list.includes(name) ? "checked" : ""}
+                      onchange="updateShortcutSetting(this)">
+                    <span>${escV2(name)}</span>
+                  </label>`).join("")}
+              </div>
             </div>`;
         };
 
