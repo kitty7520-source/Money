@@ -1217,6 +1217,56 @@
         background: #302c3a;
       }
 
+    
+      /* ===== 全部明細：月 → 日 → 單筆 ===== */
+      .details-filter-card { display:grid; gap:12px; }
+      .details-filter-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+      .details-summary {
+        display:flex; justify-content:space-between; gap:12px; align-items:end;
+        padding-top:2px;
+      }
+      .details-summary .amount { font-size:24px; font-weight:800; }
+      .details-day { margin-top:12px; }
+      .details-day-head {
+        display:flex; justify-content:space-between; align-items:center; gap:10px;
+        margin-bottom:8px; padding:0 2px;
+      }
+      .details-day-title { font-size:17px; font-weight:800; }
+      .details-day-total { font-weight:800; white-space:nowrap; }
+      .details-entry {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:10px;
+        align-items:start;
+        padding:12px 0;
+        border-top:1px solid rgba(120,110,145,.16);
+      }
+      .details-entry:first-of-type { border-top:0; }
+      .details-entry-main { min-width:0; }
+      .details-entry-title {
+        border:0 !important; background:transparent !important; padding:0 !important;
+        min-height:auto !important; text-align:left; font-size:16px; font-weight:800;
+      }
+      .details-entry-meta { margin-top:4px; line-height:1.45; }
+      .details-entry-actions {
+        display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; max-width:180px;
+      }
+      .details-mini {
+        min-height:34px !important; padding:6px 9px !important; font-size:13px !important;
+      }
+      .details-delete {
+        background:#fff1f3 !important; border-color:#efc7cf !important;
+      }
+      .details-empty { text-align:center; padding:24px 8px; }
+      @media (max-width:520px) {
+        .details-filter-grid { grid-template-columns:1fr; }
+        .details-entry { grid-template-columns:1fr; }
+        .details-entry-actions { max-width:none; justify-content:flex-start; }
+      }
+      body[data-theme="dark"] .details-delete {
+        background:#422c33 !important; border-color:#6b4650 !important;
+      }
+
     </style>
   </head>
   <body>
@@ -1258,6 +1308,7 @@
         </div>
       </div>
 
+      <button class="side-link side-direct-link" type="button" onclick="openAllDetails()">📋 全部明細</button>
       <button class="side-link side-direct-link" type="button" onclick="sideGoGeneric('搜尋')">🔍 搜尋</button>
     </aside>
 
@@ -2401,6 +2452,169 @@
           renderShortcutNav();
           syncShortcutChecks();
         }
+      })();
+    </script>
+
+
+
+    <script>
+      (function () {
+        function detailsMoney(n) {
+          return "$" + Math.round(+n || 0).toLocaleString("zh-TW");
+        }
+
+        function detailsEsc(v) {
+          return String(v ?? "")
+            .replaceAll("&","&amp;")
+            .replaceAll("<","&lt;")
+            .replaceAll(">","&gt;")
+            .replaceAll('"',"&quot;")
+            .replaceAll("'","&#39;");
+        }
+
+        function detailsNet(entry) {
+          return Math.max(0, (+entry.amount || 0) - (+entry.proxy || 0));
+        }
+
+        function detailsMonths() {
+          const set = new Set();
+          const now = new Date();
+          set.add(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
+          (D.e || []).forEach(e => {
+            if (/^\d{4}-\d{2}/.test(e.date || "")) set.add(e.date.slice(0,7));
+          });
+          return [...set].sort().reverse();
+        }
+
+        function detailsWeekday(dateString) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString || "")) return "";
+          const [y,m,d] = dateString.split("-").map(Number);
+          const wd = ["日","一","二","三","四","五","六"][new Date(y,m-1,d).getDay()];
+          return `（${wd}）`;
+        }
+
+        function detailsPayment(entry) {
+          try {
+            if (typeof paymentLabel === "function") return paymentLabel(entry);
+          } catch (e) {}
+          return entry.pay || "未設定";
+        }
+
+        function detailsIndex(entry) {
+          return D.e.indexOf(entry);
+        }
+
+        window.openAllDetails = function (month, date) {
+          if (typeof closeSideMenu === "function") closeSideMenu();
+          if (typeof show === "function") show("generic");
+          const title = document.getElementById("gtitle");
+          const desc = document.getElementById("gdesc");
+          if (title) title.textContent = "全部明細";
+          if (desc) desc.textContent = "依月份與日期查看正式支出；可細查到單日並直接修改或刪除。";
+          renderAllDetails(month, date || "");
+        };
+
+        window.renderAllDetails = function (month, date) {
+          const months = detailsMonths();
+          const selectedMonth = months.includes(month) ? month : months[0];
+          let entries = (D.e || []).filter(e =>
+            e.date?.startsWith(selectedMonth) && !e.isCreditCardPayment
+          );
+
+          const availableDates = [...new Set(entries.map(e => e.date).filter(Boolean))].sort().reverse();
+          const selectedDate = date && availableDates.includes(date) ? date : "";
+          if (selectedDate) entries = entries.filter(e => e.date === selectedDate);
+
+          entries = entries.slice().sort((a,b) => {
+            const ak = `${a.date || ""} ${a.time || ""}`;
+            const bk = `${b.date || ""} ${b.time || ""}`;
+            return bk.localeCompare(ak);
+          });
+
+          const total = entries.reduce((s,e) => s + detailsNet(e), 0);
+          const grouped = {};
+          entries.forEach(e => {
+            const key = e.date || "未填日期";
+            (grouped[key] ||= []).push(e);
+          });
+
+          const list = document.getElementById("genericList");
+          if (!list) return;
+
+          list.innerHTML = `
+            <div class="card details-filter-card">
+              <div class="details-filter-grid">
+                <div class="field" style="margin:0">
+                  <label>月份</label>
+                  <select onchange="renderAllDetails(this.value,'')">
+                    ${months.map(m => `<option value="${detailsEsc(m)}" ${m===selectedMonth?"selected":""}>${detailsEsc(m.replace("-","/"))}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="field" style="margin:0">
+                  <label>日期</label>
+                  <select onchange="renderAllDetails('${detailsEsc(selectedMonth)}',this.value)">
+                    <option value="">整月查看</option>
+                    ${availableDates.map(d => `<option value="${detailsEsc(d)}" ${d===selectedDate?"selected":""}>${detailsEsc(d.slice(5).replace("-","/"))}${detailsWeekday(d)}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+              <div class="details-summary">
+                <div>
+                  <div class="muted">${selectedDate ? "當日支出合計" : "本月支出合計"}</div>
+                  <div class="muted">${entries.length} 筆明細</div>
+                </div>
+                <div class="amount">${detailsMoney(total)}</div>
+              </div>
+            </div>
+
+            ${entries.length ? Object.entries(grouped).map(([day, rows]) => {
+              const dayTotal = rows.reduce((s,e) => s + detailsNet(e), 0);
+              const label = /^\d{4}-\d{2}-\d{2}$/.test(day)
+                ? `${day.slice(5).replace("-","/")}${detailsWeekday(day)}`
+                : day;
+              return `
+                <div class="card details-day">
+                  <div class="details-day-head">
+                    <div class="details-day-title">${detailsEsc(label)}</div>
+                    <div class="details-day-total">當日 ${detailsMoney(dayTotal)}</div>
+                  </div>
+                  ${rows.map(e => {
+                    const index = detailsIndex(e);
+                    const cat = e.cat || "未分類";
+                    const item = e.item || "未填項目";
+                    const time = e.time ? `${detailsEsc(e.time)}｜` : "";
+                    const pay = detailsEsc(detailsPayment(e));
+                    return `
+                      <div class="details-entry">
+                        <div class="details-entry-main">
+                          <button class="details-entry-title" type="button" onclick="editFormalItem(${index})">
+                            ${detailsEsc(cat)}｜${detailsEsc(item)}
+                          </button>
+                          <div class="muted details-entry-meta">${time}${pay}</div>
+                          ${typeof photoRecordButton === "function" ? photoRecordButton("formal", index, e) : ""}
+                        </div>
+                        <div class="details-entry-actions">
+                          <button class="details-mini" type="button" onclick="editFormalAmount(${index})">${detailsMoney(detailsNet(e))}</button>
+                          <button class="details-mini" type="button" onclick="editFormalPayment(${index})">付款方式</button>
+                          <button class="details-mini details-delete" type="button" onclick="deleteFormalFromDetails(${index},'${detailsEsc(selectedMonth)}','${detailsEsc(selectedDate)}')">刪除</button>
+                        </div>
+                      </div>`;
+                  }).join("")}
+                </div>`;
+            }).join("") : `<div class="card muted details-empty">這個日期目前沒有正式支出明細</div>`}
+          `;
+        };
+
+        window.deleteFormalFromDetails = function (index, month, date) {
+          const before = (D.e || []).length;
+          if (typeof deleteFormal === "function") deleteFormal(index);
+          setTimeout(() => {
+            if ((D.e || []).length < before &&
+                document.getElementById("gtitle")?.textContent === "全部明細") {
+              renderAllDetails(month, date);
+            }
+          }, 0);
+        };
       })();
     </script>
 
