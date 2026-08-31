@@ -808,44 +808,6 @@
       .temp-quick-add {
         color: #7657e8 !important;
       }
-
-      .firebase-auth-bar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin: 10px 0 4px;
-        padding: 9px 11px;
-        border: 1px solid #e7e3ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.78);
-        font-size: 12px;
-      }
-      .firebase-auth-info { min-width: 0; }
-      .firebase-auth-info b,
-      .firebase-auth-info span { display: block; }
-      .firebase-auth-email {
-        margin-top: 2px;
-        color: var(--user-text-color, #77758a);
-        opacity: .68;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .firebase-auth-button {
-        flex: 0 0 auto;
-        min-height: 36px;
-        padding: 0 11px !important;
-        border: 1px solid #d9d1f5 !important;
-        border-radius: 9px;
-        color: #7657e8;
-        font-weight: 750;
-        white-space: nowrap;
-      }
-      body[data-theme="dark"] .firebase-auth-bar {
-        background: rgba(39,35,47,.78);
-        border-color: #574f66;
-      }
     </style>
   </head>
   <body>
@@ -857,13 +819,6 @@
             <div id="month" class="muted"></div>
           </div>
           <button class="fab" type="button" aria-label="新增正式支出" onclick="openExpense()">＋</button>
-        </div>
-        <div id="firebaseAuthBar" class="firebase-auth-bar">
-          <div class="firebase-auth-info">
-            <b id="firebaseSyncStatus">雲端同步尚未登入</b>
-            <span id="firebaseAuthEmail" class="firebase-auth-email">資料目前仍保存在這台裝置</span>
-          </div>
-          <button id="firebaseAuthButton" class="firebase-auth-button" type="button">Google 登入</button>
         </div>
         <div class="nav">
           <button onclick="generic('最近')">最近</button
@@ -1278,7 +1233,6 @@
       </div>
     </div>
     <input id="backgroundFile" class="hide" type="file" accept="image/*" onchange="loadBackgroundFile(event)" />
-    <script src="app.js?v=firebase-sync-v1"></script>
-    <script type="module" src="firebase-sync.js?v=firebase-sync-v1"></script>
+    <script src="app.js"></script>
   </body>
 </html>
