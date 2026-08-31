@@ -808,25 +808,237 @@
       .temp-quick-add {
         color: #7657e8 !important;
       }
+
+      /* ===== 2026-09 側邊選單＋首頁快捷鍵 ===== */
+      .home-head-wrap {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .menu-button {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 50% !important;
+        color: #7657e8 !important;
+        font-size: 26px;
+        line-height: 1;
+        padding: 0;
+      }
+      .home-head-copy { min-width: 0; }
+      .shortcut-nav {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        margin: 12px 0 15px;
+      }
+      .shortcut-nav button {
+        min-width: 0;
+        padding: 9px 2px !important;
+        font-size: 12px;
+        color: inherit;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .shortcut-empty {
+        grid-column: 1 / -1;
+        color: var(--user-text-color, #77758a);
+        opacity: .68;
+        font-size: 12px;
+        padding: 5px 2px;
+      }
+
+      .side-mask {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        background: rgba(0,0,0,.36);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .2s ease;
+      }
+      .side-mask.on {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .side-panel {
+        position: fixed;
+        z-index: 91;
+        top: 0;
+        left: 50%;
+        width: min(360px, 86vw);
+        height: 100dvh;
+        transform: translateX(calc(-50% - min(430px, 100vw)/2 - 100%));
+        background: #fff;
+        border-right: 1px solid #e7e3ef;
+        box-shadow: 10px 0 30px rgba(0,0,0,.12);
+        overflow-y: auto;
+        transition: transform .22s ease;
+        padding: max(18px, env(safe-area-inset-top)) 14px calc(30px + env(safe-area-inset-bottom));
+      }
+      .side-panel.on {
+        transform: translateX(calc(-50% - min(430px, 100vw)/2));
+      }
+      @media (max-width: 430px) {
+        .side-panel {
+          left: 0;
+          transform: translateX(-100%);
+        }
+        .side-panel.on { transform: translateX(0); }
+      }
+      .side-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .side-head h2 { margin: 0; font-size: 20px; }
+      .side-close {
+        width: 40px;
+        height: 40px;
+        color: #7657e8 !important;
+        font-size: 28px;
+        padding: 0;
+      }
+      .side-group {
+        border-top: 1px solid #eeeaf3;
+      }
+      .side-group:last-child {
+        border-bottom: 1px solid #eeeaf3;
+      }
+      .side-group-title {
+        width: 100%;
+        min-height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 2px !important;
+        font-size: 15px;
+        font-weight: 750;
+        color: inherit;
+        text-align: left;
+      }
+      .side-group-title .chev {
+        color: #7657e8;
+        font-size: 18px;
+        transition: transform .2s ease;
+      }
+      .side-group.open .side-group-title .chev { transform: rotate(180deg); }
+      .side-group-body {
+        display: none;
+        padding: 0 0 8px;
+      }
+      .side-group.open .side-group-body { display: block; }
+      .side-link {
+        width: 100%;
+        min-height: 44px;
+        padding: 0 10px !important;
+        text-align: left;
+        border-radius: 9px !important;
+        color: inherit;
+        font-size: 14px;
+      }
+      .side-link + .side-link { margin-top: 2px; }
+      .side-subnote {
+        padding: 5px 10px 10px;
+        font-size: 12px;
+        color: var(--user-text-color, #77758a);
+        opacity: .68;
+      }
+      .shortcut-setting-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        min-height: 44px;
+        gap: 8px;
+        padding: 0 10px;
+      }
+      .shortcut-setting-row input {
+        width: 22px;
+        height: 22px;
+      }
+      .shortcut-setting-count {
+        margin: 5px 10px 8px;
+        font-size: 12px;
+        color: var(--user-text-color, #77758a);
+        opacity: .72;
+      }
+      body[data-theme="dark"] .side-panel {
+        background: #302c3a;
+        border-color: #474153;
+      }
+
     </style>
   </head>
   <body>
+
+    <div id="sideMask" class="side-mask" onclick="closeSideMenu()"></div>
+    <aside id="sidePanel" class="side-panel" aria-label="側邊功能選單">
+      <div class="side-head">
+        <h2>功能選單</h2>
+        <button class="side-close" type="button" aria-label="關閉側邊選單" onclick="closeSideMenu()">×</button>
+      </div>
+
+      <div class="side-group open">
+        <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
+          <span>記帳功能</span><span class="chev">⌄</span>
+        </button>
+        <div class="side-group-body">
+          <button class="side-link" type="button" onclick="sideGoGeneric('最近')">最近</button>
+          <button class="side-link" type="button" onclick="sideGoGeneric('搜尋')">搜尋</button>
+          <button class="side-link" type="button" onclick="sideShow('temp')">臨時帳本</button>
+        </div>
+      </div>
+
+      <div class="side-group">
+        <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
+          <span>分類管理</span><span class="chev">⌄</span>
+        </button>
+        <div class="side-group-body">
+          <button class="side-link" type="button" onclick="sideGoGeneric('分類')">分類</button>
+        </div>
+      </div>
+
+      <div class="side-group">
+        <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
+          <span>個人化設定</span><span class="chev">⌄</span>
+        </button>
+        <div class="side-group-body">
+          <button class="side-link" type="button" onclick="sideGoGeneric('背景')">背景</button>
+        </div>
+      </div>
+
+      <div class="side-group">
+        <button class="side-group-title" type="button" onclick="toggleSideGroup(this)">
+          <span>首頁快捷鍵</span><span class="chev">⌄</span>
+        </button>
+        <div class="side-group-body">
+          <div class="shortcut-setting-count" id="shortcutSettingCount">最多可顯示 5 個</div>
+          <label class="shortcut-setting-row"><span>最近</span><input type="checkbox" data-shortcut="最近" onchange="updateShortcutSetting(this)"></label>
+          <label class="shortcut-setting-row"><span>搜尋</span><input type="checkbox" data-shortcut="搜尋" onchange="updateShortcutSetting(this)"></label>
+          <label class="shortcut-setting-row"><span>臨時帳本</span><input type="checkbox" data-shortcut="臨時帳本" onchange="updateShortcutSetting(this)"></label>
+          <label class="shortcut-setting-row"><span>分類</span><input type="checkbox" data-shortcut="分類" onchange="updateShortcutSetting(this)"></label>
+          <label class="shortcut-setting-row"><span>背景</span><input type="checkbox" data-shortcut="背景" onchange="updateShortcutSetting(this)"></label>
+          <div class="side-subnote">勾選後會顯示在首頁標題下方，最多 5 個；取消勾選即可移除。</div>
+        </div>
+      </div>
+    </aside>
+
     <main class="app">
       <section id="home" class="screen on">
         <div class="home-title-row">
-          <div>
-            <h1>日常隨手記帳</h1>
-            <div id="month" class="muted"></div>
+          <div class="home-head-wrap">
+            <button class="menu-button" type="button" aria-label="開啟側邊選單" onclick="openSideMenu()">☰</button>
+            <div class="home-head-copy">
+              <h1>日常隨手記帳</h1>
+              <div id="month" class="muted"></div>
+            </div>
           </div>
           <button class="fab" type="button" aria-label="新增正式支出" onclick="openExpense()">＋</button>
         </div>
-        <div class="nav">
-          <button onclick="generic('最近')">最近</button
-          ><button onclick="generic('搜尋')">搜尋</button
-          ><button onclick="generic('分類')">分類</button
-          ><button onclick="generic('背景')">背景</button
-          ><button class="active" onclick="show('temp')">臨時帳本</button>
-        </div>
+        <div id="shortcutNav" class="shortcut-nav" aria-label="首頁快捷鍵"></div>
         <div id="monthOverviewCard" class="card">
           <div class="overview-toggle">
             <h2>本月總覽</h2>
@@ -1234,5 +1446,126 @@
     </div>
     <input id="backgroundFile" class="hide" type="file" accept="image/*" onchange="loadBackgroundFile(event)" />
     <script src="app.js"></script>
+
+    <script>
+      (function () {
+        const SHORTCUT_KEY = "dailyExpenseHomeShortcutsV1";
+        const DEFAULT_SHORTCUTS = ["最近", "搜尋", "臨時帳本"];
+        const ALL_SHORTCUTS = ["最近", "搜尋", "臨時帳本", "分類", "背景"];
+
+        window.openSideMenu = function () {
+          const p = document.getElementById("sidePanel");
+          const m = document.getElementById("sideMask");
+          if (p) p.classList.add("on");
+          if (m) m.classList.add("on");
+          syncShortcutSettingUI();
+        };
+
+        window.closeSideMenu = function () {
+          const p = document.getElementById("sidePanel");
+          const m = document.getElementById("sideMask");
+          if (p) p.classList.remove("on");
+          if (m) m.classList.remove("on");
+        };
+
+        window.toggleSideGroup = function (button) {
+          const group = button && button.closest(".side-group");
+          if (group) group.classList.toggle("open");
+        };
+
+        window.sideGoGeneric = function (name) {
+          closeSideMenu();
+          if (typeof generic === "function") generic(name);
+        };
+
+        window.sideShow = function (name) {
+          closeSideMenu();
+          if (typeof show === "function") show(name);
+        };
+
+        function loadShortcuts() {
+          try {
+            const saved = JSON.parse(localStorage.getItem(SHORTCUT_KEY) || "null");
+            if (Array.isArray(saved)) {
+              return saved.filter(x => ALL_SHORTCUTS.includes(x)).slice(0, 5);
+            }
+          } catch (e) {}
+          return DEFAULT_SHORTCUTS.slice();
+        }
+
+        function saveShortcuts(list) {
+          try { localStorage.setItem(SHORTCUT_KEY, JSON.stringify(list.slice(0, 5))); } catch (e) {}
+        }
+
+        function shortcutAction(name) {
+          if (name === "臨時帳本") {
+            if (typeof show === "function") show("temp");
+            return;
+          }
+          if (typeof generic === "function") generic(name);
+        }
+
+        function renderShortcuts() {
+          const box = document.getElementById("shortcutNav");
+          if (!box) return;
+          const list = loadShortcuts();
+          box.innerHTML = "";
+          if (!list.length) {
+            const empty = document.createElement("div");
+            empty.className = "shortcut-empty";
+            empty.textContent = "可從 ☰ → 首頁快捷鍵 加入常用功能";
+            box.appendChild(empty);
+          } else {
+            list.forEach(name => {
+              const b = document.createElement("button");
+              b.type = "button";
+              b.textContent = name;
+              b.addEventListener("click", () => shortcutAction(name));
+              box.appendChild(b);
+            });
+          }
+          syncShortcutSettingUI();
+        }
+
+        window.updateShortcutSetting = function (input) {
+          let list = loadShortcuts();
+          const name = input.dataset.shortcut;
+          if (input.checked) {
+            if (!list.includes(name)) {
+              if (list.length >= 5) {
+                input.checked = false;
+                alert("首頁快捷鍵最多 5 個。");
+                return;
+              }
+              list.push(name);
+            }
+          } else {
+            list = list.filter(x => x !== name);
+          }
+          saveShortcuts(list);
+          renderShortcuts();
+        };
+
+        window.syncShortcutSettingUI = function () {
+          const list = loadShortcuts();
+          document.querySelectorAll("[data-shortcut]").forEach(input => {
+            input.checked = list.includes(input.dataset.shortcut);
+          });
+          const count = document.getElementById("shortcutSettingCount");
+          if (count) count.textContent = `已選 ${list.length} / 5`;
+        };
+
+        document.addEventListener("keydown", e => {
+          if (e.key === "Escape") closeSideMenu();
+        });
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", renderShortcuts);
+        } else {
+          renderShortcuts();
+        }
+      })();
+    </script>
+
   </body>
 </html>
