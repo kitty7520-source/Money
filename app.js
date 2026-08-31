@@ -253,6 +253,8 @@ async function deleteSavedPhoto(photoId) {
 function persist() {
   localStorage.setItem(K, JSON.stringify(D));
   home();
+  if (typeof window.queueLedgerCloudSave === "function")
+    window.queueLedgerCloudSave();
 }
 function show(x) {
   document.querySelectorAll(".screen").forEach((e) => e.classList.remove("on"));
@@ -1295,6 +1297,62 @@ function doImport() {
   settle();
   alert("已依你的原始付款方式匯入，且同一帳本不可重複匯入");
 }
+
+// ===== Firebase cloud-sync bridge =====
+// Photos and background images stay in IndexedDB for this first sync version.
+function ledgerCloudSnapshot() {
+  let parseLocal = (key, fallback) => {
+    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+    catch { return fallback; }
+  };
+  return JSON.parse(JSON.stringify({
+    ledger: D,
+    memberGroups: parseLocal(MEMBER_GROUPS_KEY, []),
+    locations: parseLocal(LOCATIONS_KEY, []),
+    appearance: parseLocal(APPEARANCE_KEY, {}),
+  }));
+}
+
+function normalizeCloudLedger(value) {
+  let next = value && typeof value === "object" ? value : {};
+  next.e = Array.isArray(next.e) ? next.e : [];
+  next.b = Array.isArray(next.b) ? next.b : [];
+  next.cats = Array.isArray(next.cats) ? next.cats : [];
+  next.prepaid = Array.isArray(next.prepaid) ? next.prepaid : [];
+  next.cards = Array.isArray(next.cards) ? next.cards : [];
+  next.cards.forEach((card) => card.paidStatements ||= []);
+  return next;
+}
+
+window.getLedgerCloudSnapshot = ledgerCloudSnapshot;
+window.applyLedgerCloudSnapshot = function (snapshot) {
+  if (!snapshot?.ledger) return false;
+  let activeBookId = B?.id;
+  D = normalizeCloudLedger(JSON.parse(JSON.stringify(snapshot.ledger)));
+  localStorage.setItem(K, JSON.stringify(D));
+
+  if (Array.isArray(snapshot.memberGroups))
+    localStorage.setItem(MEMBER_GROUPS_KEY, JSON.stringify(snapshot.memberGroups));
+  if (Array.isArray(snapshot.locations))
+    localStorage.setItem(LOCATIONS_KEY, JSON.stringify(snapshot.locations));
+  if (snapshot.appearance && typeof snapshot.appearance === "object")
+    localStorage.setItem(APPEARANCE_KEY, JSON.stringify(snapshot.appearance));
+
+  B = activeBookId ? D.b.find((book) => book.id === activeBookId) || null : null;
+  applyAppearance();
+  refreshLocations();
+  home();
+
+  let current = document.querySelector(".screen.on")?.id;
+  if (current === "temp") books();
+  else if (current === "detail" && B) detail();
+  else if (current === "generic") {
+    let title = $("gtitle")?.textContent;
+    if (title) generic(title);
+  }
+  return true;
+};
+
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
 $("bstart").value = $("bend").value = td();
 migrateBackgroundStrengthToMaximum();
