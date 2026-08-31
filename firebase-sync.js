@@ -4,7 +4,6 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
   signOut,
   setPersistence,
   browserLocalPersistence,
@@ -165,21 +164,21 @@ async function connectUser(user) {
     setStatus("同步連線中斷", currentUser?.email || "請重新整理");
   });
 }
-
 async function signIn() {
   try {
     setStatus("正在開啟 Google 登入…", "請完成帳號登入");
     await signInWithPopup(auth, provider);
   } catch (error) {
     console.error("Google sign-in failed", error);
-    if (["auth/popup-blocked", "auth/cancelled-popup-request"].includes(error?.code)) {
-      await signInWithRedirect(auth, provider);
-      return;
-    }
-    if (error?.code === "auth/unauthorized-domain") {
-      alert("目前網址尚未加入 Firebase Authentication 的授權網域。先不要改資料，請把這個錯誤畫面截圖給我。");
-    } else if (error?.code !== "auth/popup-closed-by-user") {
-      alert(`Google 登入失敗：${error?.message || error}`);
+if (error?.code === "auth/unauthorized-domain") {
+  alert("目前網址尚未加入 Firebase Authentication 的授權網域。");
+} else if (error?.code === "auth/popup-blocked") {
+  alert("瀏覽器封鎖了 Google 登入視窗。請允許彈出式視窗後，再按一次 Google 登入。");
+} else if (error?.code === "auth/cancelled-popup-request") {
+  alert("Google 登入被中斷，請再按一次 Google 登入。");
+} else if (error?.code !== "auth/popup-closed-by-user") {
+  alert(`Google 登入失敗：${error?.message || error}`);
+}
     }
     setStatus("尚未登入雲端", "資料仍保存在這台裝置");
   }
