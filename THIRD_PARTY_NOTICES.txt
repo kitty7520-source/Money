@@ -1,0 +1,5 @@
+Tesseract.js 6.0.1 and Tesseract.js-core 6.x
+Copyright respective contributors. Licensed under Apache License 2.0.
+English and Traditional Chinese Tesseract language data from @tesseract.js-data packages.
+License text: core/LICENSE.txt
+Browser bundle dependency notices: tesseract.min.js.LICENSE.txt

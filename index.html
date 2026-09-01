@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#7657e8" />
-    <link rel="manifest" href="manifest.webmanifest" />
+    
     <title>日常隨手記帳</title>
     <style>
       * {
@@ -1343,7 +1343,9 @@
       }
 
     </style>
-  </head>
+  <style>
+[hidden]{display:none!important}.shortcut-option-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}@media(min-width:500px){.shortcut-option-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}}.shortcut-nav{display:grid!important;gap:5px!important}.shortcut-nav button{min-width:0!important;white-space:normal!important;padding:8px 2px!important;font-size:13px!important}.v10-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.v10-actions{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.v10-setting{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0}.v10-setting label{display:flex;align-items:center;gap:6px}.v10-setting input[type=checkbox]{width:20px;height:20px}.v10-right{float:right}.v10-badge{display:inline-block;color:#914800;background:#fff0d9;padding:3px 7px;border-radius:8px;font-size:12px}.v10-badge.late{color:#ad233f;background:#ffe6ec}.v10-primary{width:100%;margin-top:12px;background:#7657e8!important;color:white!important;min-height:44px}.v10-actions button{min-height:40px}.metrics>div[role=button]{cursor:pointer}#v10Modal{z-index:300}#v10Modal .sheet{max-height:90dvh;overflow:auto}#v10Version{font-size:11px}#vPlanFields{margin-bottom:12px} .sheet input,.sheet select{min-width:0} .field select{max-width:100%}
+</style><style>.v10-analysis-row{display:flex;width:100%;gap:8px;justify-content:space-between;margin:7px 0;text-align:left;min-height:44px}#v10Modal .sheet{box-sizing:border-box}#photoViewerGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}#photoFullStrip .photo-full-slide{height:min(90vw,540px);aspect-ratio:1} .metrics{display:grid}.field input[type=checkbox]{width:20px}body input,body select,body button{font-size:inherit}</style></head>
   <body>
 
     <div id="sideMask" class="side-mask" onclick="closeSideMenu()"></div>
@@ -1520,7 +1522,7 @@
         </div>
         <div class="row">
           <div class="field">
-            <label>日期</label><input id="edate" type="date" />
+            <label>日期</label><input id="edate" type="text" inputmode="numeric" placeholder="yymmdd，例如260901" maxlength="10" />
           </div>
           <div class="field">
             <label>時間</label><input id="etime" type="time" />
@@ -1852,7 +1854,1607 @@
       </div>
     </div>
     <input id="backgroundFile" class="hide" type="file" accept="image/*" onchange="loadBackgroundFile(event)" />
-    <script src="app.js"></script>
+    <script>const $ = (x) => document.getElementById(x),
+  K = "ledger-v2-data";
+const APPEARANCE_KEY = "ledger-appearance";
+const MONTH_OVERVIEW_KEY = "ledger-month-overview-open";
+const BACKGROUND_DB = "ledger-background-images";
+const BACKGROUND_MAX_MIGRATION_KEY = "ledger-background-maximized-v72";
+const PHOTO_DB_NAME = "ledger-photo-attachments";
+const PHOTO_STORE_NAME = "photos";
+const PHOTO_LIMIT_PER_ENTRY = 10;
+const BACKGROUND_TARGETS = [
+  { key: "home", name: "首頁整體背景", element: "home", shape: "home" },
+  { key: "overview", name: "本月總覽", element: "monthOverviewCard", shape: "card" },
+  { key: "reminders", name: "近期提醒", element: "remindersCard", shape: "card" },
+  { key: "calendar", name: "Google 行事曆", element: "calendarCard", shape: "card" },
+  { key: "temp", name: "臨時帳本", element: "tempHomeCard", shape: "card" },
+  { key: "recent", name: "最近頁面", element: null, shape: "home" },
+  { key: "search", name: "搜尋頁面", element: null, shape: "home" },
+  { key: "tempPage", name: "臨時帳本頁面", element: null, shape: "home" },
+];
+let backgroundUrls = {}, cropState = null;
+let pendingPhotos = { formal: [], temp: [] };
+let photoViewerUrls = [], photoViewerContext = null;
+let D = JSON.parse(localStorage.getItem(K) || "null") || {
+    e: [],
+    b: [],
+    cats: [
+      "餐飲",
+      "交通",
+      "購物",
+      "追星",
+      "娛樂",
+      "寵物",
+      "固定支出",
+      "醫療",
+      "信用卡繳款",
+      "預購",
+      "非必要支出",
+    ],
+  },
+  B = null;
+D.prepaid ||= [];
+D.items ||= [...new Set(D.e.map((entry) => entry.item).filter(Boolean))];
+D.cards ||= ["國泰", "星展", "台新"].map((name, index) => ({ id: index + 1, name, closeDay: "", statementDay: "", dueDay: "", active: true }));
+D.cards.forEach((card) => card.paidStatements ||= []);
+const td = () => {
+    let now = new Date(),
+      y = now.getFullYear(),
+      m = String(now.getMonth() + 1).padStart(2, "0"),
+      d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  },
+  currentTime = () => {
+    let now = new Date(),
+      h = String(now.getHours()).padStart(2, "0"),
+      m = String(now.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  },
+  setCurrentDateTime = (dateId, timeId) => {
+    $(dateId).value = td();
+    $(timeId).value = currentTime();
+  },
+  money = (n) => "$" + Math.round(+n || 0).toLocaleString("zh-TW");
+function photoDb() {
+  return new Promise((resolve, reject) => {
+    let request = indexedDB.open(PHOTO_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(PHOTO_STORE_NAME))
+        request.result.createObjectStore(PHOTO_STORE_NAME, { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function photoDbAction(mode, value) {
+  let db = await photoDb();
+  return new Promise((resolve, reject) => {
+    let tx = db.transaction(PHOTO_STORE_NAME, mode === "get" ? "readonly" : "readwrite"),
+      store = tx.objectStore(PHOTO_STORE_NAME),
+      request = mode === "put" ? store.put(value) : mode === "delete" ? store.delete(value) : store.get(value);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function photoUid() {
+  return globalThis.crypto?.randomUUID?.() || `photo-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function recordUid(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function compressPhoto(file) {
+  return new Promise((resolve, reject) => {
+    let url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      let maxSide = 1800, scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight)),
+        canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("照片處理失敗")), "image/jpeg", 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("無法讀取照片")); };
+    img.src = url;
+  });
+}
+function photoUi(scope) {
+  let prefix = scope === "formal" ? "e" : "t";
+  return { count: $(`${prefix}photoCount`), preview: $(`${prefix}photoPreview`), camera: $(`${prefix}photoCamera`), files: $(`${prefix}photoFiles`) };
+}
+async function handlePhotoSelection(scope, fileList) {
+  let files = [...(fileList || [])].filter((file) => file.type.startsWith("image/")), current = pendingPhotos[scope];
+  if (!files.length) return;
+  if (current.length + files.length > PHOTO_LIMIT_PER_ENTRY) {
+    alert(`每筆最多 ${PHOTO_LIMIT_PER_ENTRY} 張照片`);
+    files = files.slice(0, PHOTO_LIMIT_PER_ENTRY - current.length);
+  }
+  try {
+    for (let file of files) {
+      let blob = await compressPhoto(file);
+      current.push({ blob, url: URL.createObjectURL(blob), name: file.name || "照片" });
+    }
+    renderPhotoPicker(scope);
+  } catch (error) {
+    alert(error.message || "照片處理失敗，請換一張再試");
+  } finally {
+    let ui = photoUi(scope);
+    if (ui.camera) ui.camera.value = "";
+    if (ui.files) ui.files.value = "";
+  }
+}
+function renderPhotoPicker(scope) {
+  let ui = photoUi(scope), photos = pendingPhotos[scope];
+  if (!ui.preview || !ui.count) return;
+  ui.count.textContent = `${photos.length} 張`;
+  ui.preview.innerHTML = photos.map((photo, index) => `<div class="photo-thumb"><img src="${photo.url}" alt="${esc(photo.name)}"><button class="photo-remove" type="button" aria-label="刪除照片" onclick="removePendingPhoto('${scope}',${index})">×</button></div>`).join("");
+}
+function removePendingPhoto(scope, index) {
+  let [photo] = pendingPhotos[scope].splice(index, 1);
+  if (photo?.url) URL.revokeObjectURL(photo.url);
+  renderPhotoPicker(scope);
+}
+function resetPhotoPicker(scope) {
+  pendingPhotos[scope].forEach((photo) => URL.revokeObjectURL(photo.url));
+  pendingPhotos[scope] = [];
+  renderPhotoPicker(scope);
+}
+async function savePendingPhotos(scope, recordId) {
+  let ids = [];
+  for (let photo of pendingPhotos[scope]) {
+    let id = photoUid();
+    await photoDbAction("put", { id, recordId, blob: photo.blob, createdAt: Date.now() });
+    ids.push(id);
+  }
+  return ids;
+}
+function recordForPhotos(scope, index) {
+  return scope === "formal" ? D.e[index] : B?.entries[index];
+}
+function photoIdInUse(photoId) {
+  return D.e.some((entry) => entry.photoIds?.includes(photoId)) ||
+    D.b.some((book) => book.entries?.some((entry) => entry.photoIds?.includes(photoId)));
+}
+async function cleanupUnusedPhotoIds(photoIds) {
+  for (let photoId of photoIds || [])
+    if (!photoIdInUse(photoId)) await photoDbAction("delete", photoId).catch(() => {});
+}
+function photoRecordButton(scope, index, entry) {
+  let count = entry?.photoIds?.length || 0;
+  return `<button class="photo-record-button" type="button" onclick="openRecordPhotos('${scope}',${index})">${count ? `📷 ${count}` : "📷＋"}</button>`;
+}
+function clearPhotoViewerUrls() {
+  photoViewerUrls.forEach((url) => URL.revokeObjectURL(url));
+  photoViewerUrls = [];
+}
+async function openRecordPhotos(scope, index) {
+  let entry = recordForPhotos(scope, index);
+  if (!entry) return alert("找不到這筆紀錄");
+  entry.photoIds ||= [];
+  photoViewerContext = { scope, index };
+  clearPhotoViewerUrls();
+  $("photoViewerTitle").textContent = entry.item || entry.cat || "照片附件";
+  $("photoViewerGrid").innerHTML = '<div class="muted">照片載入中…</div>';
+  $("photoFullStrip").innerHTML = "";
+  $("photoFullStrip").hidden = true;
+  openM("photoViewerM");
+  let rows = [], fullRows = [];
+  for (let photoId of entry.photoIds) {
+    let stored = await photoDbAction("get", photoId).catch(() => null);
+    if (!stored?.blob) continue;
+    let url = URL.createObjectURL(stored.blob), urlIndex = photoViewerUrls.push(url) - 1;
+    rows.push(`<div class="photo-thumb"><img src="${url}" alt="記帳照片" onclick="openFullPhoto(${urlIndex})"><button class="photo-remove" type="button" aria-label="刪除照片" onclick="deleteSavedPhoto('${photoId}')">×</button></div>`);
+    fullRows.push(`<div class="photo-full-slide"><img src="${url}" alt="記帳原圖 ${urlIndex + 1}"></div>`);
+  }
+  $("photoViewerGrid").innerHTML = rows.join("") || '<div class="muted">尚無照片，可使用上方的「拍照」或「選擇檔案」加入。</div>';
+  $("photoFullStrip").innerHTML = fullRows.join("");
+}
+async function addPhotosToExisting(fileList) {
+  if (!photoViewerContext) return;
+  let entry = recordForPhotos(photoViewerContext.scope, photoViewerContext.index),
+    files = [...(fileList || [])].filter((file) => file.type.startsWith("image/"));
+  if (!entry || !files.length) return;
+  entry.photoIds ||= [];
+  if (entry.photoIds.length + files.length > PHOTO_LIMIT_PER_ENTRY) {
+    alert(`每筆最多 ${PHOTO_LIMIT_PER_ENTRY} 張照片`);
+    files = files.slice(0, PHOTO_LIMIT_PER_ENTRY - entry.photoIds.length);
+  }
+  if (!files.length) return;
+  try {
+    entry.id ||= recordUid(photoViewerContext.scope);
+    for (let file of files) {
+      let blob = await compressPhoto(file), id = photoUid();
+      await photoDbAction("put", { id, recordId: entry.id, blob, createdAt: Date.now() });
+      entry.photoIds.push(id);
+    }
+    persist();
+    if (photoViewerContext.scope === "formal") renderRecent(); else detail();
+    await openRecordPhotos(photoViewerContext.scope, photoViewerContext.index);
+  } catch {
+    alert("照片儲存失敗，請確認瀏覽器儲存空間後再試一次");
+  } finally {
+    if ($("viewerPhotoCamera")) $("viewerPhotoCamera").value = "";
+    if ($("viewerPhotoFiles")) $("viewerPhotoFiles").value = "";
+  }
+}
+function openFullPhoto(index) {
+  let strip = $("photoFullStrip"), slide = strip?.children[index];
+  if (!strip || !slide) return;
+  strip.hidden = false;
+  requestAnimationFrame(() => {
+    strip.scrollTo({ left: slide.offsetLeft - strip.offsetLeft, behavior: "smooth" });
+    strip.scrollIntoView({ behavior: "smooth", block: "end" });
+  });
+}
+function closePhotoViewer() {
+  $("photoFullStrip").innerHTML = "";
+  $("photoFullStrip").hidden = true;
+  clearPhotoViewerUrls();
+  photoViewerContext = null;
+  closeM("photoViewerM");
+}
+async function deleteSavedPhoto(photoId) {
+  if (!photoViewerContext || !confirm("確定刪除這張照片？")) return;
+  let entry = recordForPhotos(photoViewerContext.scope, photoViewerContext.index);
+  if (!entry) return;
+  entry.photoIds = (entry.photoIds || []).filter((id) => id !== photoId);
+  persist();
+  await cleanupUnusedPhotoIds([photoId]);
+  if (photoViewerContext.scope === "formal") renderRecent(); else detail();
+  if (entry.photoIds.length) await openRecordPhotos(photoViewerContext.scope, photoViewerContext.index);
+  else closePhotoViewer();
+}
+function persist() {
+  localStorage.setItem(K, JSON.stringify(D));
+  home();
+}
+function show(x) {
+  document.querySelectorAll(".screen").forEach((e) => e.classList.remove("on"));
+  $(x).classList.add("on");
+  if (x === "temp") books();
+  applyPageBackgrounds();
+}
+function openM(x) {
+  $(x).classList.add("on");
+}
+function closeM(x) {
+  $(x).classList.remove("on");
+}
+function openSideMenu() {
+  $("sideMenu").classList.add("on");
+  $("sideMenuOverlay").classList.add("on");
+  $("sideMenu").setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+function closeSideMenu() {
+  $("sideMenu").classList.remove("on");
+  $("sideMenuOverlay").classList.remove("on");
+  $("sideMenu").setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeSideMenu();
+});
+function toggleMonthOverview() {
+  let content = $("monthOverviewContent"),
+    button = $("monthOverviewToggle"),
+    opening = content.hidden;
+  content.hidden = !opening;
+  button.setAttribute("aria-expanded", String(opening));
+  button.setAttribute("aria-label", opening ? "收合本月總覽" : "展開本月總覽");
+  button.textContent = opening ? "－" : "＋";
+  localStorage.setItem(MONTH_OVERVIEW_KEY, opening ? "1" : "0");
+}
+function restoreMonthOverview() {
+  let opening = localStorage.getItem(MONTH_OVERVIEW_KEY) === "1",
+    content = $("monthOverviewContent"),
+    button = $("monthOverviewToggle");
+  content.hidden = !opening;
+  button.setAttribute("aria-expanded", String(opening));
+  button.setAttribute("aria-label", opening ? "收合本月總覽" : "展開本月總覽");
+  button.textContent = opening ? "－" : "＋";
+}
+function esc(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+function paymentLabel(x) {
+  if (x.pay === "預繳帳戶" && x.prepaidAccountName) return `預繳－${x.prepaidAccountName}`;
+  return x.pay === "信用卡" && x.card ? `${x.pay}－${x.card}` : x.pay || "未設定";
+}
+function activePrepaidAccounts() { return D.prepaid.filter((account) => account.active !== false); }
+function renderPrepaidSelect(selectId) {
+  let select = $(selectId), current = select?.value;
+  if (!select) return;
+  select.replaceChildren(new Option("選擇預繳帳戶", ""), ...activePrepaidAccounts().map((account) => new Option(`${account.name}（餘額 ${money(account.balance)}）`, String(account.id))));
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+  showPrepaidBalance(selectId, selectId === "eprepaid" ? "eprepaidBalance" : "");
+}
+function showPrepaidBalance(selectId, outputId) {
+  let account = D.prepaid.find((item) => String(item.id) === $(selectId)?.value), output = outputId && $(outputId);
+  if (output) output.textContent = account ? `目前餘額 ${money(account.balance)}` : "";
+}
+function createPrepaidAccount(selectId = "") {
+  let name = prompt("預繳帳戶名稱，例如：悠遊卡、會員儲值");
+  if (!name?.trim()) return;
+  let amount = +prompt("本次預繳／加值金額", "1000");
+  if (!(amount > 0)) return alert("請輸入大於 0 的金額");
+  let account = { id: Date.now(), name: name.trim(), balance: amount, active: true, transactions: [{ date: td(), type: "topup", amount, note: "建立／加值" }] };
+  D.prepaid.push(account); persist(); renderPrepaidSelect("eprepaid");
+  if (selectId && $(selectId)) { $(selectId).value = String(account.id); showPrepaidBalance(selectId, "eprepaidBalance"); }
+  if ($("gtitle")?.textContent === "預繳帳戶") renderPrepaidAccounts();
+}
+function deactivatePrepaidAccount(selectId) {
+  let account = D.prepaid.find((item) => String(item.id) === $(selectId)?.value);
+  if (!account) return alert("請先選擇預繳帳戶");
+  if (!confirm(`確定停用「${account.name}」？既有紀錄與餘額會保留。`)) return;
+  account.active = false; persist(); renderPrepaidSelect(selectId);
+}
+function topupPrepaidAccount(id) {
+  let account = D.prepaid.find((item) => item.id === id), amount = +prompt(`「${account?.name || ""}」加值金額`);
+  if (!account || !(amount > 0)) return;
+  account.balance += amount; account.transactions.push({ date: td(), type: "topup", amount, note: "加值" }); persist(); renderPrepaidAccounts();
+}
+function renderPrepaidAccounts() {
+  $("genericList").innerHTML = `<div class="card"><button type="button" onclick="createPrepaidAccount()">＋ 建立預繳帳戶</button></div>${D.prepaid.map((account) => `<div class="card"><div class="top"><div><b>${esc(account.name)}</b><div class="muted">${account.active === false ? "已停用" : "使用中"}</div></div><b>${money(account.balance)}</b></div><button type="button" onclick="topupPrepaidAccount(${account.id})">＋ 加值</button>${account.transactions.slice().reverse().map((tx) => `<div class="item top"><span>${esc(tx.date)}｜${esc(tx.note || tx.type)}</span><b>${tx.amount >= 0 ? "+" : ""}${money(tx.amount)}</b></div>`).join("")}</div>`).join("") || '<div class="card muted">尚無預繳帳戶</div>'}`;
+}
+function renderCreditCardSelect(selectId) {
+  let select = $(selectId), current = select?.value;
+  if (!select) return;
+  select.replaceChildren(...D.cards.filter((card) => card.active !== false).map((card) => new Option(card.name, card.name)));
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+}
+function renderMixedPaymentSelect(selectId, defaultValue) {
+  let select = $(selectId), current = select?.value;
+  if (!select) return;
+  let values = ["現金", ...D.cards.filter((card) => card.active !== false).map((card) => `信用卡－${card.name}`), "貨到付款"];
+  select.replaceChildren(...values.map((value) => new Option(value, value)));
+  select.value = values.includes(current) ? current : defaultValue;
+}
+function cardChargeAmount(entry, cardName) {
+  if (entry.pay === "信用卡" && entry.card === cardName) return +entry.amount || 0;
+  return (entry.paymentParts || []).filter((part) => part.pay === `信用卡－${cardName}`).reduce((sum, part) => sum + (+part.amount || 0), 0);
+}
+function cardBillRange(card) {
+  let now = new Date(), closeDay = +card.closeDay, statementDay = +card.statementDay;
+  if (!(closeDay && statementDay)) return null;
+  let generated = new Date(now.getFullYear(), now.getMonth(), statementDay);
+  if (now < generated) generated = new Date(now.getFullYear(), now.getMonth() - 1, statementDay);
+  let closeMonthOffset = closeDay <= statementDay ? 0 : -1,
+    end = new Date(generated.getFullYear(), generated.getMonth() + closeMonthOffset, closeDay),
+    previousEnd = new Date(end.getFullYear(), end.getMonth() - 1, closeDay),
+    start = new Date(previousEnd.getFullYear(), previousEnd.getMonth(), previousEnd.getDate() + 1);
+  return { start: start.toLocaleDateString("sv-SE"), end: end.toLocaleDateString("sv-SE") };
+}
+function currentCardBillAmount(card) {
+  let range = cardBillRange(card), month = td().slice(0, 7);
+  return D.e.filter((entry) => range ? entry.date >= range.start && entry.date <= range.end : entry.date?.startsWith(month)).reduce((sum, entry) => sum + cardChargeAmount(entry, card.name), 0);
+}
+function cardStatementKey(card) { return cardBillRange(card)?.end || ""; }
+function isCardStatementPaid(card) { let key = cardStatementKey(card); return !!key && card.paidStatements.includes(key); }
+function payCreditCardBill(id) {
+  let card = D.cards.find((item) => item.id === id), key = card && cardStatementKey(card), amount = card ? currentCardBillAmount(card) : 0;
+  if (!card || !key || !(amount > 0)) return alert("目前沒有可繳納的帳單");
+  if (isCardStatementPaid(card)) return alert("這期帳單已完成繳款");
+  if (!confirm(`確認「${card.name}」已繳款 ${money(amount)}？`)) return;
+  card.paidStatements.push(key);
+  D.e.push({ date:td(), item:`${card.name}信用卡繳款`, cat:"信用卡繳款", amount, pay:"現金", card:"", paymentParts:null, proxy:0, recv:0, person:"", rdate:"", isCreditCardPayment:true, creditCardId:card.id, cardStatementKey:key });
+  persist();
+  if ($("gtitle")?.textContent === "信用卡管理") renderCreditCards();
+}
+function editCreditCard(id = null) {
+  let card = D.cards.find((item) => item.id === id), name = prompt("銀行／信用卡名稱", card?.name || "");
+  if (!name?.trim()) return;
+  let closeDay = prompt("每月結帳日（1～31）", card?.closeDay || ""), statementDay = prompt("帳單產生日（1～31）", card?.statementDay || ""), dueDay = prompt("繳款截止日（1～31）", card?.dueDay || "");
+  if (![closeDay, statementDay, dueDay].every((value) => /^([1-9]|[12]\d|3[01])$/.test(value))) return alert("日期請輸入 1～31");
+  let value = { id: card?.id || Date.now(), name: name.trim(), closeDay:+closeDay, statementDay:+statementDay, dueDay:+dueDay, active:true };
+  if (card) Object.assign(card, value); else D.cards.push(value);
+  persist(); renderCreditCardSelect("ecard"); renderCreditCardSelect("tcard"); renderCreditCards();
+}
+function renderCreditCards() {
+  $("genericList").innerHTML = `<div class="card"><button type="button" onclick="editCreditCard()">＋ 新增信用卡</button></div>${D.cards.map((card) => { let range = cardBillRange(card), amount = currentCardBillAmount(card), paid = isCardStatementPaid(card); return `<div class="card"><div class="top"><div><b>${esc(card.name)}</b><div class="muted">結帳 ${card.closeDay || "未設定"} 日｜帳單產生 ${card.statementDay || "未設定"} 日｜繳款截止 ${card.dueDay || "未設定"} 日</div></div><button type="button" onclick="editCreditCard(${card.id})">修改</button></div><div class="item top"><span>本期帳單金額${range ? `<span class="muted">（${range.start}～${range.end}）</span>` : ""}</span><b>${money(amount)}</b></div>${amount > 0 ? `<button type="button" onclick="payCreditCardBill(${card.id})">${paid ? "已繳款" : "繳款"}</button>` : ""}</div>`; }).join("")}`;
+}
+function formalPaymentParts(x) {
+  return x.pay === "複合" && Array.isArray(x.paymentParts) && x.paymentParts.length
+    ? x.paymentParts
+    : [{ pay: paymentLabel(x), amount: +x.amount || 0 }];
+}
+function recentRecord(x) {
+  let index = D.e.indexOf(x);
+  return `<div class="card recent-quick-row"><div class="recent-main"><button class="recent-title-button" type="button" onclick="editFormalItem(${index})">${esc(x.item || x.cat)}</button><div class="muted">${esc(x.date || "未填日期")}${x.time ? ` ${esc(x.time)}` : ""}</div>${photoRecordButton("formal",index,x)}</div><button class="recent-quick-button" type="button" onclick="editFormalAmount(${index})">${x.draft ? "待補" : money(x.amount)}</button><button class="recent-quick-button" type="button" onclick="editFormalPayment(${index})">${esc(paymentLabel(x))}</button><button class="recent-quick-button recent-delete" type="button" onclick="deleteFormal(${index})">刪除</button></div>`;
+}
+function renderRecent() {
+  $("genericList").innerHTML =
+    D.e.slice().reverse().map(recentRecord).join("") ||
+    '<div class="card muted">尚無正式支出</div>';
+}
+function renderSearch(query = "") {
+  let q = query.trim().toLocaleLowerCase("zh-TW"),
+    results = !q
+      ? []
+      : D.e.filter((x) =>
+          [x.item, x.cat, x.person, x.pay, x.card, x.date, JSON.stringify(x.paymentParts || [])]
+            .some((value) => String(value || "").toLocaleLowerCase("zh-TW").includes(q)),
+        );
+  $("genericList").innerHTML = `<div class="card"><div class="field" style="margin:0"><label for="formalSearch">輸入關鍵字</label><input id="formalSearch" type="search" value="${esc(query)}" placeholder="項目、分類、付款方式、代付對象" oninput="renderSearch(this.value)"></div></div><div id="searchResults">${q ? results.slice().reverse().map(recentRecord).join("") || '<div class="card muted">找不到符合的正式支出</div>' : '<div class="card muted">輸入文字後顯示搜尋結果</div>'}</div>`;
+  let input = $("formalSearch");
+  if (input) {
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+function renderCategories() {
+  $("genericList").innerHTML = `<div class="card"><div class="field" style="margin-top:0"><label for="newCategory">新增分類</label><input id="newCategory" placeholder="例如：旅遊"></div><button class="primary" type="button" onclick="addCategory()">新增分類</button></div><div class="card"><h2>目前分類</h2>${D.cats.map((cat, index) => `<div class="category-manage-row"><span>${esc(cat)}</span><button class="category-delete" type="button" onclick="deleteCategory(${index})">刪除</button></div>`).join("")}</div>`;
+  $("genericList").insertAdjacentHTML("afterbegin", '<div class="card"><button type="button" onclick="generic(\'預繳帳戶\')">預繳帳戶管理</button></div>');
+  $("genericList").insertAdjacentHTML("afterbegin", '<div class="card"><button type="button" onclick="generic(\'信用卡管理\')">信用卡管理</button></div>');
+}
+function addCategory() {
+  let input = $("newCategory"),
+    name = input.value.trim();
+  if (!name) return alert("請輸入分類名稱");
+  if (D.cats.includes(name)) return alert("這個分類已存在");
+  D.cats.push(name);
+  persist();
+  generic("分類");
+}
+function deleteCategory(index) {
+  let name = D.cats[index];
+  if (D.e.some((entry) => entry.cat === name))
+    return alert(`「${name}」已有記帳紀錄，暫時不能刪除`);
+  if (!confirm(`確定刪除分類「${name}」？`)) return;
+  D.cats.splice(index, 1);
+  persist();
+  generic("分類");
+}
+function appearanceSettings() {
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "{}");
+  } catch {
+    saved = {};
+  }
+  return {
+    font: saved.font || "normal",
+    textColor: saved.textColor || "#272438",
+    backgroundColor: saved.backgroundColor || "#f5f4fa",
+    backgroundStrength: saved.backgroundStrength || {},
+  };
+}
+function applyAppearance() {
+  let settings = appearanceSettings();
+  delete document.body.dataset.theme;
+  document.body.dataset.font = settings.font;
+  document.body.style.setProperty("--user-text-color", settings.textColor);
+  document.body.style.setProperty("--user-background-color", settings.backgroundColor);
+}
+function migrateBackgroundStrengthToMaximum() {
+  if (localStorage.getItem(BACKGROUND_MAX_MIGRATION_KEY) === "1") return;
+  let settings = appearanceSettings();
+  settings.backgroundStrength = {};
+  localStorage.setItem(APPEARANCE_KEY, JSON.stringify(settings));
+  localStorage.setItem(BACKGROUND_MAX_MIGRATION_KEY, "1");
+}
+function setBackgroundPreference(type, value) {
+  let settings = appearanceSettings();
+  settings[type] = value;
+  localStorage.setItem(APPEARANCE_KEY, JSON.stringify(settings));
+  applyAppearance();
+  applyBackgrounds().catch(() => {});
+  renderBackgroundSettings();
+}
+function backgroundOverlayColor(key) {
+  let hex = appearanceSettings().textColor.replace("#", ""),
+    red = parseInt(hex.slice(0, 2), 16) || 0,
+    green = parseInt(hex.slice(2, 4), 16) || 0,
+    blue = parseInt(hex.slice(4, 6), 16) || 0,
+    luminance = (red * 299 + green * 587 + blue * 114) / 255000,
+    strength = appearanceSettings().backgroundStrength[key] ?? 100,
+    overlay = Math.max(0, Math.min(0.8, 1 - strength / 100));
+  return luminance > 0.58
+    ? `rgba(0,0,0,${overlay})`
+    : `rgba(255,255,255,${overlay})`;
+}
+function backgroundDb() {
+  return new Promise((resolve, reject) => {
+    let request = indexedDB.open(BACKGROUND_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("images");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function backgroundGet(key) {
+  let db = await backgroundDb();
+  return new Promise((resolve, reject) => {
+    let request = db.transaction("images").objectStore("images").get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function backgroundPut(key, blob) {
+  let db = await backgroundDb();
+  return new Promise((resolve, reject) => {
+    let transaction = db.transaction("images", "readwrite");
+    transaction.objectStore("images").put(blob, key);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+async function backgroundRemove(key) {
+  let db = await backgroundDb();
+  return new Promise((resolve, reject) => {
+    let transaction = db.transaction("images", "readwrite");
+    transaction.objectStore("images").delete(key);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+async function applyBackgrounds() {
+  if (!("indexedDB" in window)) return;
+  await Promise.all(BACKGROUND_TARGETS.map(async (target) => {
+    let element = $(target.element), blob = await backgroundGet(target.key);
+    if (backgroundUrls[target.key]) URL.revokeObjectURL(backgroundUrls[target.key]);
+    if (!blob) {
+      delete backgroundUrls[target.key];
+      if (element) {
+        element.style.backgroundImage = "";
+        element.classList.remove("custom-bg-active");
+      }
+      return;
+    }
+    let url = URL.createObjectURL(blob);
+    backgroundUrls[target.key] = url;
+    refreshBackgroundStyle(target.key);
+    if (element) element.classList.add("custom-bg-active");
+  }));
+  updateHomeBackgroundVisibility();
+  applyPageBackgrounds();
+}
+function updateHomeBackgroundVisibility() {
+  let homeHasImage = !!backgroundUrls.home;
+  BACKGROUND_TARGETS.filter((target) => target.element && target.key !== "home").forEach((target) => {
+    let element = $(target.element), hasOwnImage = !!backgroundUrls[target.key];
+    element.style.backgroundColor = homeHasImage && !hasOwnImage ? "transparent" : "";
+  });
+  if ($("prepaidHomeCard")) $("prepaidHomeCard").style.backgroundColor = homeHasImage ? "transparent" : "";
+}
+function refreshBackgroundStyle(key) {
+  let target = BACKGROUND_TARGETS.find((item) => item.key === key),
+    url = backgroundUrls[key];
+  if (!target || !url) return;
+  let overlay = backgroundOverlayColor(key);
+  if (target.element) $(target.element).style.backgroundImage = `linear-gradient(${overlay}, ${overlay}), url("${url}")`;
+  else applyPageBackgrounds();
+}
+function setPageBackground(elementId, preferredKey) {
+  let element = $(elementId), key = backgroundUrls[preferredKey] ? preferredKey : "home", url = backgroundUrls[key];
+  if (!element) return;
+  element.classList.toggle("page-bg-active", !!url);
+  element.style.backgroundImage = url
+    ? `linear-gradient(${backgroundOverlayColor(key)}, ${backgroundOverlayColor(key)}), url("${url}")`
+    : "";
+}
+function applyPageBackgrounds() {
+  setPageBackground("temp", "tempPage");
+  setPageBackground("detail", "home");
+  let title = $("gtitle")?.textContent;
+  setPageBackground("generic", title === "最近" ? "recent" : title === "搜尋" ? "search" : "home");
+}
+function setBackgroundStrength(key, value) {
+  let settings = appearanceSettings(), strength = Math.max(20, Math.min(100, +value));
+  settings.backgroundStrength[key] = strength;
+  localStorage.setItem(APPEARANCE_KEY, JSON.stringify(settings));
+  let label = $(`backgroundStrengthLabel-${key}`);
+  if (label) label.textContent = `${strength}%`;
+  refreshBackgroundStyle(key);
+}
+function renderBackgroundSettings() {
+  let settings = appearanceSettings();
+  $("genericList").innerHTML = `<div class="card appearance-section"><h2>字體設定</h2><div class="field"><label>字體大小</label><div class="appearance-options"><button class="appearance-choice${settings.font === "normal" ? " selected" : ""}" type="button" onclick="setBackgroundPreference('font','normal')">標準</button><button class="appearance-choice${settings.font === "large" ? " selected" : ""}" type="button" onclick="setBackgroundPreference('font','large')">放大</button></div></div><div class="color-setting-row"><label for="backgroundTextColor">字體顏色</label><input id="backgroundTextColor" type="color" value="${esc(settings.textColor)}" onchange="setBackgroundPreference('textColor',this.value)"></div><div class="color-setting-row"><label for="backgroundDefaultColor">未設定圖片的預設背景顏色</label><input id="backgroundDefaultColor" type="color" value="${esc(settings.backgroundColor)}" onchange="setBackgroundPreference('backgroundColor',this.value)"></div></div><div class="card"><div class="notice" style="margin:0 0 8px">每個區域可使用不同相片。選擇後可拖曳、放大、縮小及裁剪；圖片只儲存在目前裝置。</div>${BACKGROUND_TARGETS.map((target) => { let strength = settings.backgroundStrength[target.key] ?? 100; return `<div class="background-setting-row"><div class="background-setting-head"><div><b>${esc(target.name)}</b><div id="backgroundStatus-${target.key}" class="muted">讀取中</div></div><div class="background-setting-actions"><button class="background-small-button" type="button" onclick="chooseBackground('${target.key}')">選擇相片</button><button class="background-small-button background-remove" type="button" onclick="removeBackground('${target.key}')">移除</button></div></div><div class="background-strength"><label for="backgroundStrength-${target.key}">圖片顯示濃度 <span id="backgroundStrengthLabel-${target.key}">${strength}%</span></label><input id="backgroundStrength-${target.key}" type="range" min="20" max="100" step="5" value="${strength}" oninput="setBackgroundStrength('${target.key}',this.value)"></div></div>`; }).join("")}</div><button class="secondary" type="button" onclick="resetAllBackgroundSettings()">全部恢復預設</button>`;
+  if (!("indexedDB" in window)) return alert("此瀏覽器不支援儲存背景圖片");
+  BACKGROUND_TARGETS.forEach(async (target) => {
+    let blob = await backgroundGet(target.key), status = $(`backgroundStatus-${target.key}`);
+    if (status) status.textContent = blob ? "已設定，可重新選擇" : target.key === "home" ? "尚未設定" : "沿用首頁背景";
+  });
+}
+function chooseBackground(key) {
+  let target = BACKGROUND_TARGETS.find((item) => item.key === key);
+  if (!target) return;
+  cropState = { target };
+  $("backgroundFile").value = "";
+  $("backgroundFile").click();
+}
+function loadBackgroundFile(event) {
+  let file = event.target.files?.[0];
+  if (!file || !cropState) return;
+  if (!file.type.startsWith("image/")) return alert("請選擇圖片檔案");
+  let image = new Image(), url = URL.createObjectURL(file);
+  image.onload = () => {
+    URL.revokeObjectURL(url);
+    let canvas = $("backgroundCanvas"), homeShape = cropState.target.shape === "home";
+    canvas.width = 720;
+    canvas.height = homeShape ? 1200 : 320;
+    cropState.image = image;
+    cropState.baseScale = Math.max(canvas.width / image.width, canvas.height / image.height);
+    cropState.zoom = 1;
+    cropState.x = (canvas.width - image.width * cropState.baseScale) / 2;
+    cropState.y = (canvas.height - image.height * cropState.baseScale) / 2;
+    $("backgroundZoom").value = "1";
+    $("backgroundCropTitle").textContent = `裁剪－${cropState.target.name}`;
+    setupBackgroundDrag();
+    drawBackgroundCrop();
+    openM("backgroundM");
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(url);
+    alert("無法讀取這張圖片，請改選其他圖片");
+  };
+  image.src = url;
+}
+function clampBackgroundCrop() {
+  if (!cropState?.image) return;
+  let canvas = $("backgroundCanvas"), scale = cropState.baseScale * cropState.zoom,
+    width = cropState.image.width * scale, height = cropState.image.height * scale;
+  cropState.x = Math.min(0, Math.max(canvas.width - width, cropState.x));
+  cropState.y = Math.min(0, Math.max(canvas.height - height, cropState.y));
+}
+function drawBackgroundCrop() {
+  if (!cropState?.image) return;
+  clampBackgroundCrop();
+  let canvas = $("backgroundCanvas"), context = canvas.getContext("2d"),
+    scale = cropState.baseScale * cropState.zoom;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(cropState.image, cropState.x, cropState.y,
+    cropState.image.width * scale, cropState.image.height * scale);
+}
+function changeBackgroundZoom(value) {
+  if (!cropState?.image) return;
+  let oldScale = cropState.baseScale * cropState.zoom,
+    nextZoom = +value,
+    nextScale = cropState.baseScale * nextZoom;
+  cropState.x -= cropState.image.width * (nextScale - oldScale) / 2;
+  cropState.y -= cropState.image.height * (nextScale - oldScale) / 2;
+  cropState.zoom = nextZoom;
+  drawBackgroundCrop();
+}
+function setupBackgroundDrag() {
+  let canvas = $("backgroundCanvas");
+  canvas.onpointerdown = (event) => {
+    if (!cropState?.image) return;
+    cropState.drag = { x: event.clientX, y: event.clientY, imageX: cropState.x, imageY: cropState.y };
+    canvas.setPointerCapture(event.pointerId);
+  };
+  canvas.onpointermove = (event) => {
+    if (!cropState?.drag) return;
+    let ratio = canvas.width / canvas.getBoundingClientRect().width;
+    cropState.x = cropState.drag.imageX + (event.clientX - cropState.drag.x) * ratio;
+    cropState.y = cropState.drag.imageY + (event.clientY - cropState.drag.y) * ratio;
+    drawBackgroundCrop();
+  };
+  canvas.onpointerup = canvas.onpointercancel = () => {
+    if (cropState) cropState.drag = null;
+  };
+}
+function cancelBackgroundCrop() {
+  closeM("backgroundM");
+  cropState = null;
+}
+function saveBackgroundCrop() {
+  if (!cropState?.image) return;
+  let key = cropState.target.key, canvas = $("backgroundCanvas");
+  canvas.toBlob(async (blob) => {
+    if (!blob) return alert("背景圖片處理失敗，請再試一次");
+    try {
+      await backgroundPut(key, blob);
+      closeM("backgroundM");
+      cropState = null;
+      await applyBackgrounds();
+      renderBackgroundSettings();
+    } catch {
+      alert("背景圖片儲存失敗，請確認瀏覽器允許網站儲存資料");
+    }
+  }, "image/jpeg", 0.82);
+}
+async function removeBackground(key) {
+  let target = BACKGROUND_TARGETS.find((item) => item.key === key);
+  if (!target || !confirm(`確定移除「${target.name}」背景圖片？`)) return;
+  await backgroundRemove(key);
+  await applyBackgrounds();
+  renderBackgroundSettings();
+}
+async function resetAllBackgroundSettings() {
+  if (!confirm("確定移除全部背景圖片，並恢復預設字體與顏色？")) return;
+  await Promise.all(BACKGROUND_TARGETS.map((target) => backgroundRemove(target.key)));
+  localStorage.setItem(APPEARANCE_KEY, JSON.stringify({
+    font: "normal",
+    textColor: "#272438",
+    backgroundColor: "#f5f4fa",
+    backgroundStrength: {},
+  }));
+  applyAppearance();
+  await applyBackgrounds();
+  renderBackgroundSettings();
+}
+function openMonthlyAnalysis() {
+  show("generic");
+  $("gtitle").textContent = "本月分析";
+  $("gtext").textContent = "依本月正式記帳紀錄統計分類、付款方式與消費明細。";
+  let month = td().slice(0, 7),
+    entries = D.e.filter((entry) => entry.date?.startsWith(month)),
+    analysisEntries = entries.filter((entry) => !entry.isCreditCardPayment),
+    total = analysisEntries.reduce((sum, entry) => sum + entry.amount - (entry.proxy || 0), 0),
+    average = analysisEntries.length ? total / analysisEntries.length : 0,
+    categories = {},
+    payments = {};
+  analysisEntries.forEach((entry) => {
+    let net = entry.amount - (entry.proxy || 0),
+      category = entry.cat || "未分類";
+    categories[category] = (categories[category] || 0) + net;
+    formalPaymentParts(entry).forEach((part) => {
+      payments[part.pay] = (payments[part.pay] || 0) + (+part.amount || 0);
+    });
+  });
+  let categoryRows = Object.entries(categories)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, amount]) => `<div class="item top"><span>${esc(name)}</span><b>${money(amount)}</b></div>`)
+      .join("") || '<div class="muted">本月尚無分類資料</div>',
+    paymentRows = Object.entries(payments)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, amount]) => `<div class="item top"><span>${esc(name)}</span><b>${money(amount)}</b></div>`)
+      .join("") || '<div class="muted">本月尚無付款資料</div>',
+    detailRows = entries.slice().reverse().map((entry) =>
+      `<div class="item top"><div><b>${esc(entry.item || entry.cat)}</b><div class="muted">${esc(entry.date)}｜${esc(entry.cat || "未分類")}｜${esc(paymentLabel(entry))}</div></div><b>${money(entry.amount)}</b></div>`,
+    ).join("") || '<div class="muted">本月尚無正式記帳紀錄</div>';
+  $("genericList").innerHTML = `<div class="card"><div class="analysis-summary"><div class="analysis-stat"><span class="muted">本月記帳筆數</span><div class="val">${analysisEntries.length} 筆</div></div><div class="analysis-stat"><span class="muted">平均每筆消費</span><div class="val">${money(average)}</div></div><div class="analysis-stat"><span class="muted">本月總消費</span><div class="val">${money(total)}</div></div><div class="analysis-stat"><span class="muted">最高分類</span><div class="val">${esc(Object.entries(categories).sort((a, b) => b[1] - a[1])[0]?.[0] || "尚無")}</div></div></div></div><div class="card"><h2>分類分析</h2>${categoryRows}</div><div class="card"><h2>付款方式分析</h2>${paymentRows}</div><div class="card"><h2>本月記帳明細</h2>${detailRows}</div>`;
+  applyPageBackgrounds();
+}
+function metricDetailRow(title, subtitle, amount) {
+  return `<div class="item top"><div><b>${esc(title)}</b><div class="muted">${esc(subtitle)}</div></div><b>${amount < 0 ? "−" : ""}${money(Math.abs(amount))}</b></div>`;
+}
+function metricGroup(id, name, amount, rows) {
+  return `<button class="metric-group-toggle" type="button" aria-expanded="false" aria-controls="${id}" onclick="toggleMetricGroup('${id}',this)"><span>${esc(name)}</span><span>${money(amount)} ＋</span></button><div id="${id}" class="metric-group-details" hidden>${rows.join("") || '<div class="muted">目前沒有明細</div>'}</div>`;
+}
+function toggleMetricGroup(id, button) {
+  let details = $(id), opening = details.hidden;
+  details.hidden = !opening;
+  button.setAttribute("aria-expanded", String(opening));
+  let amount = button.lastElementChild.textContent.replace(/[＋－]$/, "").trim();
+  button.lastElementChild.textContent = `${amount} ${opening ? "－" : "＋"}`;
+}
+function openMonthlyMetric(type) {
+  let month = td().slice(0, 7),
+    entries = D.e.filter((entry) => entry.date?.startsWith(month)),
+    title = "",
+    note = "",
+    rows = [], groups = [],
+    total = 0;
+  if (type === "paid") {
+    title = "本月已支出明細";
+    note = "點項目名稱可展開或收合明細。";
+    let cashRows = [], topupRows = [], cashTotal = 0, topupTotal = 0;
+    entries.forEach((entry) => formalPaymentParts(entry).filter((part) => part.pay === "現金").forEach((part) => {
+      let amount = +part.amount || 0;
+      cashTotal += amount;
+      cashRows.push(metricDetailRow(entry.item || entry.cat, `${entry.date}｜現金`, amount));
+    }));
+    D.prepaid.forEach((account) => (account.transactions || []).filter((tx) => tx.type === "topup" && tx.date?.startsWith(month)).forEach((tx) => {
+      let amount = +tx.amount || 0;
+      topupTotal += amount;
+      topupRows.push(metricDetailRow(`${account.name}加值`, `${tx.date}｜預繳帳戶`, amount));
+    }));
+    total = cashTotal + topupTotal;
+    groups = [metricGroup("metricCashSpend", "本月現金支出", cashTotal, cashRows), metricGroup("metricPrepaidTopup", "本月預繳帳戶加值", topupTotal, topupRows)];
+  } else if (type === "pending" || type === "cash") {
+    title = type === "pending" ? "目前待付款明細" : "本月需準備現金明細";
+    note = "點項目名稱可展開或收合明細。";
+    let creditRows = [], codRows = [], creditTotal = 0, codTotal = 0;
+    D.e.forEach((entry) => D.cards.forEach((card) => {
+      let amount = cardChargeAmount(entry, card.name);
+      if (!amount) return;
+      creditTotal += amount;
+      creditRows.push(metricDetailRow(entry.item || entry.cat, `${entry.date}｜信用卡－${card.name}`, amount));
+    }));
+    D.e.filter((entry) => entry.isCreditCardPayment).forEach((entry) => {
+      let amount = +entry.amount || 0;
+      creditTotal -= amount;
+      creditRows.push(metricDetailRow(entry.item || "信用卡繳款", `${entry.date}｜已繳款`, -amount));
+    });
+    entries.forEach((entry) => formalPaymentParts(entry).filter((part) => part.pay === "貨到付款").forEach((part) => {
+      let amount = +part.amount || 0;
+      codTotal += amount;
+      codRows.push(metricDetailRow(entry.item || entry.cat, `${entry.date}｜貨到付款`, amount));
+    }));
+    creditTotal = Math.max(0, creditTotal);
+    total = creditTotal + codTotal;
+    groups = [metricGroup(`metricCredit${type}`, "尚未繳的信用卡金額", creditTotal, creditRows), metricGroup(`metricCod${type}`, "本月貨到付款", codTotal, codRows)];
+  } else {
+    title = "本月總消費明細";
+    note = "本月正式記帳消費，已扣除代付款並排除信用卡繳款。";
+    entries.filter((entry) => !entry.isCreditCardPayment).forEach((entry) => {
+      let amount = (+entry.amount || 0) - (+entry.proxy || 0);
+      total += amount;
+      rows.push(metricDetailRow(entry.item || entry.cat, `${entry.date}｜${entry.cat || "未分類"}｜${paymentLabel(entry)}`, amount));
+    });
+  }
+  show("generic");
+  $("gtitle").textContent = title;
+  $("gtext").textContent = note;
+  $("genericList").innerHTML = `<div class="card"><div class="top"><b>合計</b><div class="val">${money(total)}</div></div></div><div class="card">${groups.length ? groups.join("") : rows.join("") || '<div class="muted">目前沒有明細</div>'}</div>`;
+  applyPageBackgrounds();
+}
+function generic(t) {
+  show("generic");
+  $("gtitle").textContent = t;
+  $("gtext").textContent =
+    t === "搜尋"
+      ? "搜尋正式支出、備註與代付對象。"
+      : t === "分類"
+        ? "正式帳本分類與項目管理。"
+        : t === "背景"
+          ? "設定首頁背景、區塊背景、字體大小與顏色。"
+          : t === "預繳帳戶"
+            ? "管理預繳、加值、扣款與目前餘額。"
+          : t === "信用卡管理"
+            ? "管理信用卡結帳日、帳單產生日、繳款截止日與本期金額。"
+          : "最近正式記帳紀錄。";
+  if (t === "最近") renderRecent();
+  else if (t === "搜尋") renderSearch();
+  else if (t === "分類") renderCategories();
+  else if (t === "背景") renderBackgroundSettings();
+  else if (t === "預繳帳戶") renderPrepaidAccounts();
+  else if (t === "信用卡管理") renderCreditCards();
+  applyPageBackgrounds();
+}
+function openExpense() {
+  openM("expenseM");
+  resetPhotoPicker("formal");
+  $("edate").value = td().slice(2).replaceAll("-", "");
+  $("etime").value = currentTime();
+  $("ecat").innerHTML = D.cats.map((x) => `<option>${x}</option>`).join("");
+  $("ecat").value = D.cats.includes("餐飲") ? "餐飲" : (D.cats[0] || "");
+  renderExpenseItems();
+  $("eitem").selectedIndex = -1;
+  $("eamt").value = "";
+  $("emixamt1").value = $("emixamt2").value = "";
+  $("pamt").value = $("recv").value = $("other").value = $("rdate").value = "";
+  $("epay").value = "現金";
+  $("ecalendar").checked = false;
+  $("proxy").checked = false;
+  $("person").selectedIndex = -1;
+  $("proxybox").classList.add("hide");
+  $("otherbox").classList.add("hide");
+  renderPrepaidSelect("eprepaid");
+  renderCreditCardSelect("ecard");
+  renderMixedPaymentSelect("emixpay1", "現金");
+  renderMixedPaymentSelect("emixpay2", "貨到付款");
+  $("ecard").selectedIndex = -1;
+  $("eprepaid").selectedIndex = -1;
+  $("emixpay1").selectedIndex = -1;
+  $("emixpay2").selectedIndex = -1;
+  cardToggle();
+}
+function renderExpenseItems() {
+  $("eitem").replaceChildren(...D.items.map((item) => new Option(item, item)));
+}
+function addExpenseCategory() {
+  let name = prompt("新增大分類名稱");
+  if (!name?.trim()) return;
+  name = name.trim();
+  if (!D.cats.includes(name)) D.cats.push(name);
+  $("ecat").replaceChildren(...D.cats.map((cat) => new Option(cat, cat)));
+  $("ecat").value = name;
+  localStorage.setItem(K, JSON.stringify(D));
+}
+function addExpenseItem() {
+  let name = prompt("新增項目名稱");
+  if (!name?.trim()) return;
+  name = name.trim();
+  if (!D.items.includes(name)) D.items.push(name);
+  renderExpenseItems();
+  $("eitem").value = name;
+  localStorage.setItem(K, JSON.stringify(D));
+}
+function normalizeExpenseDate() {
+  let value = $("edate").value.trim();
+  if (/^\d{6}$/.test(value)) $("edate").value = `20${value.slice(0, 2)}-${value.slice(2, 4)}-${value.slice(4, 6)}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test($("edate").value);
+}
+const MEMBER_GROUPS_KEY = "ledger-member-groups";
+function memberGroups() {
+  return JSON.parse(localStorage.getItem(MEMBER_GROUPS_KEY) || "[]");
+}
+function renderMemberGroups() {
+  let groups = memberGroups();
+  $("memberGroupOptions").replaceChildren(...groups.map((group) => {
+    let option = new Option(group.members.join(", "));
+    option.label = group.name;
+    return option;
+  }));
+}
+function openBookModal() {
+  renderMemberGroups();
+  openM("bookM");
+}
+function saveMemberGroup() {
+  let members = $("bmembers")
+    .value.split(/[,，]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (!members.includes("我")) members.unshift("我");
+  if (members.length < 2) return alert("請先輸入至少 2 位成員");
+  let name = prompt("請輸入組合名稱，例如：家人、聚餐群");
+  if (!name?.trim()) return;
+  let groups = memberGroups(),
+    existing = groups.findIndex((group) => group.name === name.trim()),
+    value = { name: name.trim(), members };
+  if (existing >= 0) groups[existing] = value;
+  else groups.push(value);
+  localStorage.setItem(MEMBER_GROUPS_KEY, JSON.stringify(groups));
+  renderMemberGroups();
+  alert("常用成員組合已儲存");
+}
+function deleteMemberGroup() {
+  let members = $("bmembers").value.split(/[,，]/).map((x) => x.trim()).filter(Boolean),
+    groups = memberGroups(),
+    index = groups.findIndex((group) => group.members.join("|") === members.join("|"));
+  if (index < 0) return alert("目前成員不在常用清單中");
+  let name = groups[index].name;
+  if (!confirm(`確定刪除常用組合「${name}」？`)) return;
+  groups.splice(index, 1);
+  localStorage.setItem(MEMBER_GROUPS_KEY, JSON.stringify(groups));
+  renderMemberGroups();
+}
+function cardToggle() {
+  let payment = $("epay").value;
+  $("epaygroup").classList.toggle("has-bank", payment === "信用卡");
+  $("ecardbox").classList.toggle("hide", payment !== "信用卡");
+  $("emixedbox").classList.toggle("hide", payment !== "複合");
+  $("eprepaidbox").classList.toggle("hide", payment !== "預繳帳戶");
+  if (payment === "預繳帳戶") renderPrepaidSelect("eprepaid");
+}
+function proxyToggle() {
+  $("proxybox").classList.toggle("hide", !$("proxy").checked);
+}
+function personToggle() {
+  $("otherbox").classList.toggle("hide", $("person").value !== "_");
+}
+async function saveExpense() {
+  let a = +$("eamt").value;
+  let isDraft = !(a > 0);
+  if (isDraft && !pendingPhotos.formal.length) return alert("請輸入金額，或先加入照片以建立待補記帳");
+  let paymentParts = null;
+  let prepaidAccount = null;
+  if (!isDraft && $("epay").value === "複合") {
+    let amount1 = +$("emixamt1").value, amount2 = +$("emixamt2").value;
+    if (!(amount1 > 0 && amount2 > 0)) return alert("請輸入兩種付款方式的金額");
+    if (Math.abs(amount1 + amount2 - a) > 0.01) return alert("複合付款金額合計必須等於總金額");
+    paymentParts = [
+      { pay: $("emixpay1").value, amount: amount1 },
+      { pay: $("emixpay2").value, amount: amount2 },
+    ];
+  }
+  if (!isDraft && $("epay").value === "預繳帳戶") {
+    prepaidAccount = D.prepaid.find((account) => String(account.id) === $("eprepaid").value && account.active !== false);
+    if (!prepaidAccount) return alert("請選擇預繳帳戶");
+    if (prepaidAccount.balance < a) return alert(`預繳餘額不足，尚差 ${money(a - prepaidAccount.balance)}`);
+  }
+  let recordId = recordUid("formal"), photoIds;
+  try { photoIds = await savePendingPhotos("formal", recordId); }
+  catch { return alert("照片儲存失敗，請確認瀏覽器儲存空間後再試一次"); }
+  if (prepaidAccount) {
+    prepaidAccount.balance -= a;
+    prepaidAccount.transactions.push({ date: $("edate").value, type: "spend", amount: -a, note: $("eitem").value || $("ecat").value });
+  }
+  let p = $("proxy").checked ? +$("pamt").value : 0;
+  D.e.push({
+    id: recordId,
+    draft: isDraft,
+    date: $("edate").value,
+    time: $("etime").value,
+    item: $("eitem").value || (isDraft ? "待補記帳" : ""),
+    cat: $("ecat").value,
+    amount: a,
+    pay: isDraft ? "未設定" : $("epay").value,
+    card: isDraft ? "" : $("ecard").value,
+    paymentParts,
+    prepaidAccountId: prepaidAccount?.id || null,
+    prepaidAccountName: prepaidAccount?.name || "",
+    proxy: p,
+    recv: +$("recv").value || 0,
+    person: $("person").value === "_" ? $("other").value : $("person").value,
+    rdate: $("rdate").value,
+    photoIds,
+  });
+  resetPhotoPicker("formal");
+  closeM("expenseM");
+  persist();
+}
+function daysFromToday(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return null;
+  let [year, month, day] = date.split("-").map(Number),
+    today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(year, month - 1, day) - today) / 86400000);
+}
+function renderCalendarUpcoming() {
+  let events = [
+    ...D.e.filter((entry) => entry.calendarSync).map((entry) => ({
+      date: entry.date,
+      title: entry.item || entry.cat,
+      time: entry.time || "",
+      type: "正式支出",
+    })),
+    ...D.b.filter((book) => book.calendarSync).map((book) => ({
+      date: book.start,
+      title: book.name,
+      time: book.startTime || "",
+      type: "臨時帳本",
+    })),
+  ].map((event) => ({ ...event, days: daysFromToday(event.date) }))
+    .filter((event) => event.days !== null && event.days >= 0 && event.days <= 14)
+    .sort((a, b) => a.days - b.days || a.title.localeCompare(b.title, "zh-TW"));
+  $("calendarCard").hidden = events.length === 0;
+  $("calendarUpcoming").innerHTML = events.length
+    ? `<div class="item"><b>未來 14 天行程提醒</b></div>${events.map((event) => {
+        let countdown = event.days === 0 ? "今天" : event.days === 1 ? "明天" : `還有 ${event.days} 天`;
+        return `<div class="item"><b>📅 ${esc(event.title)}</b><div class="muted">${esc(event.date)}${event.time ? ` ${esc(event.time)}` : ""}｜${countdown}｜${event.type}</div></div>`;
+      }).join("")}`
+    : "未來 14 天沒有已加入的行程";
+}
+function home() {
+  $("month").textContent = new Date().toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+  });
+  let m = td().slice(0, 7),
+    E = D.e.filter((x) => x.date?.startsWith(m)),
+    prepaidTopups = D.prepaid.flatMap((account) => account.transactions || []).filter((tx) => tx.type === "topup" && tx.date?.startsWith(m)).reduce((sum, tx) => sum + (+tx.amount || 0), 0),
+    paid = E.flatMap(formalPaymentParts).filter((x) => x.pay === "現金").reduce((s, x) => s + (+x.amount || 0), 0) + prepaidTopups,
+    allCreditCharges = D.e.reduce((sum, entry) => sum + D.cards.reduce((cardSum, card) => cardSum + cardChargeAmount(entry, card.name), 0), 0),
+    allCreditPayments = D.e.filter((entry) => entry.isCreditCardPayment).reduce((sum, entry) => sum + (+entry.amount || 0), 0),
+    codPending = E.flatMap(formalPaymentParts).filter((x) => x.pay === "貨到付款").reduce((s, x) => s + (+x.amount || 0), 0),
+    pend = Math.max(0, allCreditCharges - allCreditPayments) + codPending,
+    con = E.filter((entry) => !entry.isCreditCardPayment).reduce((s, x) => s + x.amount - (x.proxy || 0), 0);
+  $("paid").textContent = money(paid);
+  $("pending").textContent = money(pend);
+  $("cash").textContent = money(pend);
+  $("consume").textContent = money(con);
+  $("prepaidHomeCard").hidden = D.prepaid.length === 0;
+  $("prepaidHome").innerHTML = D.prepaid.filter((account) => account.active !== false || account.balance > 0).map((account) => `<div class="item top"><span>${esc(account.name)}</span><b>${money(account.balance)}</b></div>`).join("");
+  let r = D.e
+    .filter((x) => (x.proxy || 0) > (x.recv || 0))
+    .map(
+      (x) =>
+        `<div class="item"><b>💰 ${x.item || x.cat}－待收款</b><div class="muted">${x.person}｜${money(x.proxy - x.recv)} ${x.rdate ? "｜" + x.rdate : ""}</div></div>`,
+    );
+  D.e.forEach((entry, index) => {
+    if (!entry.draft) return;
+    r.unshift(`<div class="item"><div class="top"><div><b>📝 ${esc(entry.item || "待補記帳")}</b><div class="muted">${esc(entry.date || "未填日期")}${entry.time ? ` ${esc(entry.time)}` : ""}｜正式帳本｜待補記帳</div></div><button type="button" onclick="generic('最近')">查看</button></div></div>`);
+  });
+  D.b.filter((book) => !book.imported).forEach((book) => {
+    book.entries.forEach((entry) => {
+      if (!entry.draft) return;
+      r.unshift(`<div class="item"><div class="top"><div><b>📝 ${esc(entry.item || "待補記帳")}</b><div class="muted">${esc(entry.date || "未填日期")}${entry.time ? ` ${esc(entry.time)}` : ""}｜${esc(book.name)}｜待補記帳</div></div><button type="button" onclick="openBook(${book.id})">查看</button></div></div>`);
+    });
+  });
+  D.cards.forEach((card) => {
+    if (!card.dueDay) return;
+    let now = new Date(), lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(), due = new Date(now.getFullYear(), now.getMonth(), Math.min(+card.dueDay, lastDay));
+    if (due < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+      let nextLastDay = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
+      due = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(+card.dueDay, nextLastDay));
+    }
+    let date = due.toLocaleDateString("sv-SE"), days = daysFromToday(date), amount = currentCardBillAmount(card);
+    if (days !== null && days <= 5 && amount > 0 && !isCardStatementPaid(card)) r.push(`<div class="item"><div class="top"><div><b>💳 繳款提醒－${esc(card.name)}</b><div class="muted">${date}｜${money(amount)}｜還有 ${days} 天</div></div><button type="button" onclick="payCreditCardBill(${card.id})">繳款</button></div></div>`);
+  });
+  $("remindersCard").hidden = r.length === 0;
+  $("reminders").innerHTML = r.join("") || "目前沒有提醒";
+  renderCalendarUpcoming();
+  let activeBooks = D.b.filter((book) => !book.imported);
+  $("tempHomeCard").hidden = activeBooks.length === 0;
+  $("tempHome").innerHTML = activeBooks.length
+    ? activeBooks
+        .map(
+          (book) =>
+            `<div class="temp-home-row"><div class="temp-home-info"><b>${book.name}</b><div class="muted">${book.start}～${book.end}｜${book.members.length}人｜使用中</div></div><button class="temp-quick-add" type="button" aria-label="新增${book.name}支出" onclick="quickAddToBook(${book.id})">＋</button></div>`,
+        )
+        .join("")
+    : "";
+}
+function saveBook() {
+  let ms = $("bmembers")
+    .value.split(/[,，]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (!ms.includes("我")) ms.unshift("我");
+  if (!$("bname").value || ms.length < 2)
+    return alert("請輸入名稱與至少2位成員");
+  D.b.push({
+    id: Date.now(),
+    name: $("bname").value,
+    start: $("bstart").value,
+    end: $("bend").value,
+    members: ms,
+    entries: [],
+    imported: false,
+  });
+  closeM("bookM");
+  persist();
+  books();
+}
+function books() {
+  let activeBooks = D.b.filter((book) => !book.imported);
+  $("activeBooksTitle").hidden = activeBooks.length === 0;
+  $("books").innerHTML =
+    activeBooks
+      .map(
+        (b) =>
+          `<div class="card" onclick="openBook(${b.id})"><div class="top"><b>${b.name}</b><span class="badge">使用中</span></div><div class="muted">${b.start}～${b.end}｜${b.members.length} 人</div></div>`,
+      )
+      .join("") || '<div class="card muted">目前沒有使用中的臨時帳本</div>';
+}
+function openBook(id) {
+  B = D.b.find((x) => x.id === id);
+  show("detail");
+  $("bookTitle").textContent = B.name;
+  $("bookMeta").textContent =
+    `${B.start}～${B.end}｜成員 ${B.members.length} 人`;
+  detail();
+}
+function quickAddToBook(id) {
+  B = D.b.find((book) => book.id === id && !book.imported);
+  if (!B) return alert("找不到使用中的臨時帳本");
+  openTempEntry();
+}
+function detail() {
+  $("bookTotal").textContent = money(
+    B.entries.reduce((s, x) => s + x.amount, 0),
+  );
+  $("detailBody").innerHTML =
+    B.entries
+      .map(
+        (x, i) =>
+          `<div class="card"><div class="top"><b>${x.item}</b><b>${x.draft ? "待補" : money(x.amount)}</b></div><div class="muted">${x.date}${x.time ? ` ${x.time}` : ""}｜${x.payer}支付${x.payer === "我" ? "（" + tempPaymentLabel(x) + "）" : ""}｜${x.shares.length}人分攤</div><div class="row" style="margin-top:9px">${photoRecordButton("temp",i,x)}<button class="secondary" onclick="editTempEntry(${i})">編輯</button><button class="secondary" onclick="deleteTempEntry(${i})">刪除</button></div></div>`,
+      )
+      .join("") || '<div class="card muted">尚無支出</div>';
+}
+function tempPaymentLabel(x) {
+  return x.pay === "信用卡" && x.card ? `信用卡－${x.card}` : x.pay || "現金";
+}
+function tempPaymentParts(x) {
+  if (x.pay === "複合式" && x.paymentParts && !Array.isArray(x.paymentParts)) {
+    let parts = [];
+    if (x.paymentParts.cash) parts.push({ pay: "現金", amount: x.paymentParts.cash });
+    if (x.paymentParts.card) parts.push({ pay: "信用卡", amount: x.paymentParts.card });
+    if (x.paymentParts.unpaid) parts.push({ pay: "貨到付款", amount: x.paymentParts.unpaid });
+    return parts;
+  }
+  return x.pay === "複合" && Array.isArray(x.paymentParts)
+    ? x.paymentParts
+    : [{ pay: tempPaymentLabel(x), amount: +x.amount || 0 }];
+}
+function openTempEntry() {
+  openM("entryM");
+  resetPhotoPicker("temp");
+  setCurrentDateTime("tdate", "ttime");
+  $("titem").value = "";
+  $("tamt").value = "";
+  $("tpay").value = "現金";
+  $("tmixamt1").value = $("tmixamt2").value = "";
+  renderCreditCardSelect("tcard");
+  renderMixedPaymentSelect("tmixpay1", "現金");
+  renderMixedPaymentSelect("tmixpay2", "貨到付款");
+  $("tcard").selectedIndex = -1;
+  $("tmixpay1").selectedIndex = -1;
+  $("tmixpay2").selectedIndex = -1;
+  $("payer").innerHTML = `<option value="" selected disabled>請選擇支付人</option>${B.members.map((x) => `<option>${x}</option>`).join("")}`;
+  $("shares").innerHTML = B.members
+    .map(
+      (x) =>
+        `<label class="check"><input class="sc" type="checkbox" value="${x}" onchange="shareChanged()"> ${x}</label>`,
+    )
+    .join("");
+  payerToggle();
+  customShares();
+}
+function payerToggle() {
+  let isMe = $("payer").value === "我";
+  $("mypay").classList.toggle("hide", !isMe);
+  if (isMe) tempPaymentToggle();
+  else {
+    $("tcardbox").classList.add("hide");
+    $("tmixed").classList.add("hide");
+  }
+}
+function tempPaymentToggle() {
+  let pay = $("tpay").value;
+  $("mypay").classList.toggle("has-bank", pay === "信用卡");
+  $("tcardbox").classList.toggle("hide", pay !== "信用卡");
+  $("tmixed").classList.toggle("hide", pay !== "複合");
+}
+function selected() {
+  return [...document.querySelectorAll(".sc:checked")].map((x) => x.value);
+}
+function clearAllShares() {
+  document.querySelectorAll(".sc").forEach((x) => (x.checked = false));
+  customShares();
+}
+function shareChanged() {
+  customShares();
+}
+function customShares() {
+  $("custom").innerHTML =
+    $("mode").value === "custom"
+      ? selected()
+          .map(
+            (x) =>
+              `<div class="field"><label>${x} 應負擔</label><input class="ca" data-p="${x}" type="number"></div>`,
+          )
+          .join("")
+      : "";
+}
+async function saveEntry() {
+  let a = +$("tamt").value,
+    ms = selected();
+  let isDraft = !(a > 0);
+  if (!$("payer").value) return alert("請選擇支付人");
+  if (!ms.length) return alert("請選擇分攤成員");
+  if (isDraft && !pendingPhotos.temp.length) return alert("請輸入金額，或先加入照片以建立待補記帳");
+  let sh =
+    $("mode").value === "equal"
+      ? ms.map((p) => ({ p, a: a / ms.length }))
+      : [...document.querySelectorAll(".ca")].map((x) => ({
+          p: x.dataset.p,
+          a: +x.value,
+        }));
+  if (Math.abs(sh.reduce((s, x) => s + x.a, 0) - a) > 0.01)
+    return alert("分攤加總需等於總金額");
+  let payer = $("payer").value;
+  let pay = payer === "我" ? $("tpay").value : "現金",
+    card = payer === "我" && pay === "信用卡" ? $("tcard").value : "",
+    paymentParts = null;
+  if (!isDraft && payer === "我" && pay === "複合") {
+    let amount1 = +$("tmixamt1").value, amount2 = +$("tmixamt2").value;
+    if (!(amount1 > 0 && amount2 > 0)) return alert("請輸入兩種付款方式的金額");
+    if (Math.abs(amount1 + amount2 - a) > 0.01)
+      return alert("複合付款金額合計必須等於總金額");
+    paymentParts = [
+      { pay: $("tmixpay1").value, amount: amount1 },
+      { pay: $("tmixpay2").value, amount: amount2 },
+    ];
+  }
+  let recordId = recordUid("temp"), photoIds;
+  try { photoIds = await savePendingPhotos("temp", recordId); }
+  catch { return alert("照片儲存失敗，請確認瀏覽器儲存空間後再試一次"); }
+  B.entries.push({
+    id: recordId,
+    draft: isDraft,
+    date: $("tdate").value,
+    time: $("ttime").value,
+    item: $("titem").value || (isDraft ? "待補記帳" : "未命名"),
+    amount: a,
+    payer,
+    pay,
+    card,
+    paymentParts,
+    shares: sh,
+    photoIds,
+  });
+  resetPhotoPicker("temp");
+  closeM("entryM");
+  persist();
+  detail();
+}
+function bal() {
+  let p = {},
+    o = {};
+  B.members.forEach((x) => (p[x] = o[x] = 0));
+  B.entries.forEach((x) => {
+    p[x.payer] += x.amount;
+    x.shares.forEach((y) => (o[y.p] += y.a));
+  });
+  return B.members.map((x) => ({
+    p: x,
+    paid: p[x],
+    owed: o[x],
+    net: p[x] - o[x],
+  }));
+}
+function settle() {
+  let bs = bal();
+  $("detailBody").innerHTML =
+    `<div class="card"><h2>成員結算</h2>${bs.map((x) => `<div class="item top"><div><b>${x.p}</b><div class="muted">已付 ${money(x.paid)}｜應負擔 ${money(x.owed)}</div></div><b class="${x.net >= 0 ? "red" : "green"}">${x.net >= 0 ? "應收" : "應付"} ${money(Math.abs(x.net))}</b></div>`).join("")}</div><button class="primary" onclick="preview()">匯入正式帳本</button><div class="notice">其他人的付款方式預設現金，不需選擇；只有我的付款方式會帶入正式帳本。</div>`;
+}
+function overview() {
+  $("detailBody").innerHTML =
+    `<div class="card"><h2>總覽</h2><div class="val">${money(B.entries.reduce((s, x) => s + x.amount, 0))}</div><div class="muted">此金額不列入正式帳本</div></div><button class="primary" onclick="preview()">匯入正式帳本</button>`;
+}
+function preview() {
+  if (B.imported) return alert("此帳本已匯入過");
+  let g = {},
+    me = bal().find((x) => x.p === "我");
+  B.entries.filter((x) => x.payer === "我").forEach((x) =>
+    tempPaymentParts(x).forEach((part) =>
+      g[part.pay] = (g[part.pay] || 0) + (+part.amount || 0),
+    ),
+  );
+  $("preview").innerHTML = `<div class="card">${Object.entries(g)
+    .map(
+      ([k, v]) =>
+        `<div class="item top"><span>${k}</span><b>${money(v)}</b></div>`,
+    )
+    .join(
+      "",
+    )}<div class="item top"><span>我的最終負擔</span><b>${money(me.owed)}</b></div><div class="item top"><span>${me.net >= 0 ? "朋友應還我" : "我應付朋友"}</span><b>${money(Math.abs(me.net))}</b></div></div>`;
+  openM("importM");
+}
+function doImport() {
+  if (B.imported) return;
+  let me = bal().find((x) => x.p === "我"),
+    mine = B.entries.filter((x) => x.payer === "我"),
+    paid = mine.reduce((s, x) => s + x.amount, 0),
+    ratio = paid ? Math.min(1, me.owed / paid) : 0;
+  mine.forEach((x) => {
+    let oldCard = x.pay?.startsWith("信用卡－"),
+      oldMixed = x.pay === "複合式",
+      importedParts = oldMixed ? tempPaymentParts(x) : x.paymentParts || null;
+    D.e.push({
+      id: recordUid("formal-import"),
+      date: x.date,
+      time: x.time || "",
+      item: B.name + "－" + x.item,
+      cat: "非必要支出",
+      amount: x.amount,
+      pay: oldCard ? "信用卡" : oldMixed ? "複合" : x.pay,
+      card: oldCard ? x.pay.replace("信用卡－", "") : x.card || "",
+      paymentParts: importedParts,
+      proxy: x.amount * (1 - ratio),
+      recv: 0,
+      person: "旅伴",
+      rdate: "",
+      photoIds: [...(x.photoIds || [])],
+    });
+  });
+  B.imported = true;
+  closeM("importM");
+  persist();
+  settle();
+  alert("已依你的原始付款方式匯入，且同一帳本不可重複匯入");
+}
+
+$("bstart").value = $("bend").value = td();
+migrateBackgroundStrengthToMaximum();
+applyAppearance();
+restoreMonthOverview();
+applyBackgrounds().catch(() => {});
+home();
+async function deleteFormal(i) {
+  if (confirm("確定刪除這筆正式支出？刪除後無法復原。")) {
+    let entry = D.e[i];
+    if (entry?.isCreditCardPayment && entry.creditCardId && entry.cardStatementKey) {
+      let card = D.cards.find((item) => item.id === entry.creditCardId);
+      if (card) card.paidStatements = card.paidStatements.filter((key) => key !== entry.cardStatementKey);
+    }
+    if (entry?.pay === "預繳帳戶" && entry.prepaidAccountId) {
+      let account = D.prepaid.find((item) => item.id === entry.prepaidAccountId);
+      if (account) { account.balance += entry.amount; account.transactions.push({ date: td(), type: "restore", amount: entry.amount, note: `刪除支出歸還：${entry.item || entry.cat}` }); }
+    }
+    let photoIds = [...(entry?.photoIds || [])];
+    D.e.splice(i, 1);
+    persist();
+    await cleanupUnusedPhotoIds(photoIds);
+    generic("最近");
+  }
+}
+function editFormalAmount(i) {
+  let x = D.e[i];
+  if (!x) return alert("找不到這筆紀錄");
+  if (x.isCreditCardPayment) return alert("信用卡帳單金額由該期刷卡紀錄自動計算；如需取消，請刪除這筆繳款紀錄。");
+  let v = prompt("修改金額", x.amount);
+  if (v === null) return;
+  v = +v;
+  if (!v) return alert("金額需大於0");
+  if (x.pay === "預繳帳戶" && x.prepaidAccountId) {
+    let account = D.prepaid.find((item) => item.id === x.prepaidAccountId), difference = v - x.amount;
+    if (account && difference > account.balance) return alert("預繳帳戶餘額不足以增加這筆金額");
+    if (account) { account.balance -= difference; account.transactions.push({ date: td(), type: "adjust", amount: -difference, note: `調整支出：${x.item || x.cat}` }); }
+  }
+  x.amount = v;
+  x.draft = false;
+  persist();
+  generic("最近");
+}
+function editFormalItem(i) {
+  let x = D.e[i];
+  if (!x) return alert("找不到這筆紀錄");
+  let value = prompt("修改項目", x.item || "");
+  if (value === null) return;
+  x.item = value.trim() || "未命名";
+  persist();
+  generic("最近");
+}
+function editFormalPayment(i) {
+  let x = D.e[i];
+  if (!x) return alert("找不到這筆紀錄");
+  if (x.isCreditCardPayment) return alert("信用卡繳款紀錄的付款狀態不可快速修改；如需取消，請刪除這筆繳款紀錄。");
+  let current = x.pay === "信用卡" ? `信用卡－${x.card || "國泰"}` : x.pay,
+    value = prompt("修改付款方式\n輸入：現金、信用卡－國泰、信用卡－星展、信用卡－台新、貨到付款、複合", current);
+  if (value === null) return;
+  value = value.trim();
+  let allowed = ["現金", "信用卡－國泰", "信用卡－星展", "信用卡－台新", "貨到付款", "複合"];
+  if (!allowed.includes(value)) return alert("請輸入清單中的付款方式");
+  if (value === "複合" && !(x.pay === "複合" && x.paymentParts?.length)) {
+    return alert("複合付款需設定各付款金額，請於新增支出時選擇「複合」。");
+  }
+  if (x.pay === "預繳帳戶" && x.prepaidAccountId) {
+    let account = D.prepaid.find((item) => item.id === x.prepaidAccountId);
+    if (account) { account.balance += x.amount; account.transactions.push({ date: td(), type: "restore", amount: x.amount, note: `更改付款方式歸還：${x.item || x.cat}` }); }
+    x.prepaidAccountId = null; x.prepaidAccountName = "";
+  }
+  if (value.startsWith("信用卡－")) {
+    x.pay = "信用卡";
+    x.card = value.replace("信用卡－", "");
+  } else {
+    x.pay = value;
+    x.card = "";
+    if (value !== "複合") x.paymentParts = null;
+  }
+  persist();
+  generic("最近");
+}
+async function deleteTempEntry(i) {
+  if (confirm("確定刪除這筆臨時帳本支出？")) {
+    let photoIds = [...(B.entries[i]?.photoIds || [])];
+    B.entries.splice(i, 1);
+    persist();
+    await cleanupUnusedPhotoIds(photoIds);
+    detail();
+  }
+}
+function editTempEntry(i) {
+  let x = B.entries[i],
+    v = prompt("修改金額", x.amount);
+  if (v === null) return;
+  v = +v;
+  if (!v) return alert("金額需大於0");
+  let n = prompt("修改項目", x.item);
+  if (n === null) return;
+  x.amount = v;
+  x.item = n;
+  x.draft = false;
+  if (x.shares && x.shares.length) {
+    let each = v / x.shares.length;
+    x.shares = x.shares.map((s) => ({ p: s.p, a: each }));
+  }
+  persist();
+  detail();
+}
+async function deleteBook() {
+  if (!B) return;
+  if (
+    !confirm(
+      `確定刪除「${B.name}」？\n${B.imported ? "此帳本已匯入正式帳本；刪除臨時帳本不會刪除已匯入的正式帳務。" : "帳本內的臨時紀錄會一起刪除。"}`,
+    )
+  )
+    return;
+  let photoIds = B.entries.flatMap((entry) => entry.photoIds || []);
+  D.b = D.b.filter((x) => x.id !== B.id);
+  B = null;
+  persist();
+  await cleanupUnusedPhotoIds(photoIds);
+  show("temp");
+}
+
+// ===== V6 Google Calendar integration (no OAuth Client ID required) =====
+function addDays(date, days) {
+  let [y, m, d] = date.split("-").map(Number),
+    value = new Date(Date.UTC(y, m - 1, d));
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+function compactDate(date) {
+  return date.replaceAll("-", "");
+}
+function compactDateTime(date, time, minuteDelta = 0) {
+  let [y, m, d] = date.split("-").map(Number),
+    [h, min] = time.split(":").map(Number),
+    value = new Date(Date.UTC(y, m - 1, d, h, min + minuteDelta));
+  return value.toISOString().slice(0, 19).replaceAll("-", "").replaceAll(":", "");
+}
+function googleCalendarUrl({
+  summary,
+  startDate,
+  startTime,
+  endDate,
+  endTime,
+  description = "",
+}) {
+  startDate = startDate || td();
+  endDate = endDate || startDate;
+  let timed = !!(startTime || endTime),
+    start,
+    end;
+  if (timed) {
+    let st = startTime || "09:00",
+      et = endTime || "";
+    start = compactDateTime(startDate, st);
+    end = et ? compactDateTime(endDate, et) : compactDateTime(startDate, st, 60);
+    if (end <= start) end = compactDateTime(startDate, st, 60);
+  } else {
+    start = compactDate(startDate);
+    end = compactDate(addDays(endDate, 1));
+  }
+  let params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: summary || "未命名活動",
+    dates: `${start}/${end}`,
+    ctz: "Asia/Taipei",
+  });
+  if (description) params.set("details", description);
+  return `https://calendar.google.com/calendar/render?${params}`;
+}
+function openGoogleCalendar(event) {
+  let calendarWindow = window.open(googleCalendarUrl(event), "_blank");
+  if (calendarWindow) calendarWindow.opener = null;
+  else
+    alert("行事曆頁面被瀏覽器阻擋，請允許此網站開啟新視窗後再試一次。");
+}
+
+// Wrap saveExpense to optionally sync calendar while preserving existing behavior.
+const _saveExpense = saveExpense;
+saveExpense = function () {
+  if (!normalizeExpenseDate()) return alert("日期請輸入 6 碼 yymmdd，例如 260831");
+  let before = D.e.length;
+  let startTime = $("etime")?.value || "",
+    sync = !!$("ecalendar")?.checked;
+  _saveExpense();
+  if (D.e.length === before) return;
+  let x = D.e[D.e.length - 1];
+  x.time = startTime;
+  x.calendarSync = sync;
+  persist();
+  if (sync) {
+    openGoogleCalendar({
+      summary: x.item || x.cat,
+      startDate: x.date,
+      startTime,
+      description: `日常隨手記帳｜${x.cat}｜${money(x.amount)}`,
+    });
+    alert("支出已儲存。Google 行事曆已開啟，請按「儲存」完成加入。");
+  }
+};
+
+const _saveBook = saveBook;
+saveBook = function () {
+  let before = D.b.length;
+  let startTime = $("bstarttime")?.value || "",
+    endTime = $("bendtime")?.value || "",
+    sync = !!$("bcalendar")?.checked;
+  _saveBook();
+  if (D.b.length === before) return;
+  let b = D.b[D.b.length - 1];
+  b.startTime = startTime;
+  b.endTime = endTime;
+  b.calendarSync = sync;
+  persist();
+  if (sync) {
+    openGoogleCalendar({
+      summary: b.name,
+      startDate: b.start,
+      startTime: b.startTime,
+      endDate: b.end,
+      endTime: b.endTime,
+    });
+    alert("臨時帳本已建立。Google 行事曆已開啟，請按「儲存」完成加入。");
+  }
+};
+</script>
 
     <script>
       (function () {
@@ -1926,6 +3528,7 @@
           const box = document.getElementById("shortcutNav");
           if (!box) return;
           const list = getShortcuts();
+          box.style.gridTemplateColumns = `repeat(${Math.max(1,list.length)},minmax(0,1fr))`;
           box.replaceChildren();
           if (!list.length) {
             const empty = document.createElement("div");
@@ -2383,7 +3986,7 @@
         }
 
         function netAmountV2(entry) {
-          return Math.max(0, (+entry.amount || 0) - (+entry.proxy || 0));
+          return window.Ledger10 ? Ledger10.net(entry) : Math.max(0, (+entry.amount || 0) - (+entry.proxy || 0));
         }
 
         function categoryTotalsV2(entries) {
@@ -2567,7 +4170,7 @@
         }
 
         function detailsNet(entry) {
-          return Math.max(0, (+entry.amount || 0) - (+entry.proxy || 0));
+          return window.Ledger10 ? Ledger10.net(entry) : Math.max(0, (+entry.amount || 0) - (+entry.proxy || 0));
         }
 
         function detailsMonths() {
@@ -2687,7 +4290,7 @@
                           <div class="muted details-entry-meta">${time}${pay}</div>
                           ${typeof photoRecordButton === "function" ? photoRecordButton("formal", index, e) : ""}
                         </div>
-                        <div class="details-entry-actions">
+                        <div class="details-entry-actions">${window.Ledger10 ? Ledger10.actions(index) : ""}
                           <button class="details-mini" type="button" onclick="editFormalAmount(${index})">${detailsMoney(detailsNet(e))}</button>
                           <button class="details-mini" type="button" onclick="editFormalPayment(${index})">付款方式</button>
                           <button class="details-mini details-delete" type="button" onclick="deleteFormalFromDetails(${index},'${detailsEsc(selectedMonth)}','${detailsEsc(selectedDate)}')">刪除</button>
@@ -2832,5 +4435,355 @@
       })();
     </script>
 
-  </body>
+  <script>/* 日常隨手記帳 V10.0 — local data compatible with ledger-v2-data. */
+(() => {
+  'use strict';
+  const N = window.Ledger10 = {};
+  const E = esc, num = v => Number(v) || 0, round = v => Math.round((v + Number.EPSILON) * 100) / 100;
+  const uid = () => recordUid('v10');
+  const fmt = v => '$' + num(v).toLocaleString('zh-TW', {maximumFractionDigits:2});
+  const arr = v => Array.isArray(v) ? v : [];
+  D.cashAccounts ||= [{id:1,name:'現金',openingBalance:0,adjustment:0,active:true}];
+  D.v10 ||= {moves:[],refunds:[],templates:[],settlements:[],homeOrder:['paid','pending','cash','consume'],hidden:[]};
+  const V = D.v10;
+  ['moves','refunds','templates','settlements','hidden'].forEach(k => V[k] ||= []);
+  D.e.forEach(e => e.id ||= uid());
+  D.cards.forEach(c => c.paidStatements ||= []);
+  const cashRef = e => 'cash:' + (e?.cashAccountId || D.v10?.legacyCashId || D.cashAccounts[0]?.id);
+  const prepaidRef = id => 'prepaid:' + id;
+  const cardRef = id => 'card:' + id;
+  const account = ref => {
+    const [kind,id] = (ref || '').split(':');
+    return (kind === 'cash' ? D.cashAccounts : kind === 'prepaid' ? D.prepaid : D.cards).find(a => String(a.id) === id);
+  };
+  const refName = ref => account(ref)?.name || '帳戶未設定';
+  function accounts(includeCards=false) {
+    return [...D.cashAccounts.map(a=>({ref:'cash:'+a.id,...a})),...D.prepaid.map(a=>({ref:prepaidRef(a.id),...a})),...(includeCards?D.cards.map(a=>({ref:cardRef(a.id),...a})):[])].filter(a=>a.active!==false);
+  }
+  const opts = (list,selected) => list.map(a=>`<option value="${E(a.ref)}" ${a.ref===selected?'selected':''}>${E(a.name)}</option>`).join('');
+  const field = (label,html) => `<div class="field"><label>${label}</label>${html}</div>`;
+  const input = (id,type,value='',extra='') => `<input id="${id}" type="${type}" value="${E(value)}" ${extra}>`;
+  const val = id => $(id)?.value || '';
+  const button = (label,action) => `<button type="button" onclick="${action}">${label}</button>`;
+  function page(title,html,note='') { closeSideMenu(); show('generic'); $('gtitle').textContent=title; $('gtext').textContent=note; $('gtext').hidden=!note; $('genericList').innerHTML=html; }
+  function modal(title,html,action='') {
+    $('v10Modal').innerHTML=`<div class="sheet"><div class="top"><h2>${title}</h2>${button('取消',"closeM('v10Modal')")}</div>${html}${action?`<button type="button" class="v10-primary" onclick="${action}">儲存</button>`:''}</div>`;
+    openM('v10Modal');
+  }
+  function save() { V.version='10.0'; persist(); }
+  function validAmount(v,zero=false) { return Number.isFinite(v) && (zero?v>=0:v>0) && Math.abs(v*100-Math.round(v*100))<0.00001; }
+  function validDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s+'T12:00:00').toLocaleDateString('sv-SE')===s; }
+  function dateAt(month,day) { const [y,m]=month.split('-').map(Number); return `${y}-${String(m).padStart(2,'0')}-${String(Math.min(day,new Date(y,m,0).getDate())).padStart(2,'0')}`; }
+  function monthAdd(month,n) { const [y,m]=month.split('-').map(Number), d=new Date(y,m-1+n,1); return d.toLocaleDateString('sv-SE').slice(0,7); }
+  function statementFor(date,card) { if(!card.closeDay) return ''; let m=date.slice(0,7); if(date>dateAt(m,+card.closeDay)) m=monthAdd(m,1); return dateAt(m,+card.closeDay); }
+  function dueFor(key,card) { if(!key||!card.dueDay) return ''; let m=key.slice(0,7), due=dateAt(m,+card.dueDay); if(due<=key) due=dateAt(monthAdd(m,1),+card.dueDay); return due; }
+  N.badge = date => { const days=daysFromToday(date); return !date||days===null||days>3?'':`<span class="v10-badge ${days<0?'late':''}">${days<0?'已逾期':days===0?'今日到期':'快到期'}</span>`; };
+  function received(e) { return round(V.refunds.filter(r=>r.entryId===e.id&&r.status==='received').reduce((s,r)=>s+num(r.amount),0)); }
+  N.net = e => e.isCreditCardPayment ? 0 : round(num(e.amount)-num(e.proxy)-V.refunds.filter(r=>r.entryId===e.id&&r.status==='received').reduce((s,r)=>s+num(r.ownAmount ?? r.amount),0));
+  function cashPart(e) { return formalPaymentParts(e).filter(p=>p.pay==='現金').reduce((s,p)=>s+num(p.amount),0); }
+  function legacyTopups() { return D.prepaid.flatMap(a=>arr(a.transactions).filter(t=>t.type==='topup'&&!t.moveId&&!t.isOpening).map(t=>({...t,ref:prepaidRef(a.id)}))); }
+  N.balance = ref => {
+    const a=account(ref); if(!a) return 0;
+    if(ref.startsWith('prepaid:')) return round(a.balance);
+    if(!ref.startsWith('cash:')) return 0;
+    let v=num(a.openingBalance)+num(a.adjustment);
+    D.e.filter(e=>cashRef(e)===ref).forEach(e=>v-=cashPart(e));
+    if(ref==='cash:'+(V.legacyCashId||D.cashAccounts[0]?.id)) legacyTopups().filter(t=>!t.source||t.source==='現金').forEach(t=>v-=num(t.amount));
+    V.moves.forEach(t=>{if(t.from===ref)v-=num(t.amount)+num(t.fee);if(t.to===ref)v+=num(t.amount);});
+    V.refunds.filter(r=>r.status==='received'&&r.to===ref).forEach(r=>v+=num(r.amount));
+    V.settlements.filter(s=>s.from===ref).forEach(s=>v-=num(s.amount));
+    return round(v);
+  };
+  function prepaidChange(ref,amount,type,note,link,date=td()) { if(!ref.startsWith('prepaid:'))return; const a=account(ref); if(!a)throw Error('預繳帳戶不存在');a.balance=round(num(a.balance)+amount);a.transactions||=[];a.transactions.push({date,type,amount,note,moveId:link}); }
+  function enough(ref,amount) { if(ref.startsWith('prepaid:')&&N.balance(ref)<amount) {alert(`預繳餘額不足\n目前餘額 ${fmt(N.balance(ref))}\n付款金額 ${fmt(amount)}\n尚差 ${fmt(amount-N.balance(ref))}\n請先加值、改付款帳戶或改用複合付款。`);return false;}return true; }
+  function charges(card) {
+    const result=[];
+    D.e.filter(e=>!e.isCreditCardPayment&&!e.draft).forEach(e=>{
+      const amount=cardChargeAmount(e,card.name);if(!amount)return;
+      const plan=e.installment, count=plan?num(plan.count):1;
+      const first=e.statementOverride || (plan?.firstMonth?dateAt(plan.firstMonth,+card.closeDay):statementFor(e.postedDate||e.date,card));
+      for(let i=0;i<count;i++) {
+        const principal=plan?(i===count-1?round(amount-round(amount/count)*(count-1)):round(amount/count)):amount;
+        const fee=plan?(i===count-1?round(num(plan.fee)-round(num(plan.fee)/count)*(count-1)):round(num(plan.fee)/count)):0;
+        const key=first?(i===0?first:dateAt(monthAdd(first.slice(0,7),i),+card.closeDay)):'';
+        result.push({entry:e,key,amount:round(principal+fee),principal,fee,part:i+1,count,date:e.date,label:e.item||e.cat});
+      }
+    });
+    V.moves.filter(t=>t.from===cardRef(card.id)).forEach(t=>result.push({key:statementFor(t.date,card),amount:num(t.amount)+num(t.fee),date:t.date,label:'加值／轉帳：'+refName(t.to)}));
+    return result;
+  }
+  N.statements = card => {
+    const grouped={};charges(card).forEach(t=>{const g=grouped[t.key]||={key:t.key,due:dueFor(t.key,card),total:0,paid:0,credit:0,rows:[]};g.total=round(g.total+t.amount);g.rows.push(t);});
+    let payments=0;
+    D.e.filter(e=>e.isCreditCardPayment&&(String(e.creditCardId)===String(card.id)||(!e.creditCardId&&e.card===card.name))).forEach(p=>{
+      if(p.cardStatementKey&&grouped[p.cardStatementKey])grouped[p.cardStatementKey].paid+=num(p.amount);else payments+=num(p.amount);
+    });
+    arr(card.paidStatements).forEach(key=>{if(grouped[key]&&!D.e.some(e=>e.isCreditCardPayment&&String(e.creditCardId)===String(card.id)&&e.cardStatementKey===key))grouped[key].paid=grouped[key].total;});
+    const refunds=V.refunds.filter(r=>r.to===cardRef(card.id)&&r.status==='received'&&r.date<=td()).reduce((s,r)=>s+num(r.amount),0);
+    let credit=refunds;
+    const rows=Object.values(grouped).sort((a,b)=>a.key.localeCompare(b.key));
+    rows.forEach(g=>{let rem=Math.max(0,g.total-g.paid),used=Math.min(payments,rem);g.paid+=used;payments-=used;rem-=used;g.credit=Math.min(credit,rem);credit-=g.credit;g.remaining=round(Math.max(0,rem-g.credit));let allocated=g.paid+g.credit;g.rows.forEach(r=>{r.paidAmount=Math.min(r.amount,allocated);r.remaining=round(r.amount-r.paidAmount);allocated=Math.max(0,allocated-r.paidAmount);});});
+    return rows;
+  };
+  N.codRemaining = e => round(formalPaymentParts(e).filter(p=>p.pay==='貨到付款').reduce((s,p)=>s+num(p.amount),0)-V.settlements.filter(s=>s.entryId===e.id).reduce((s,p)=>s+num(p.amount),0));
+  function pendingRows() {
+    const rows=[];
+    D.cards.forEach(c=>N.statements(c).filter(s=>(!s.key||s.key<=td())&&s.remaining>0).forEach(s=>rows.push({label:c.name+'｜'+(s.key||'帳期未設定'),date:s.due,amount:s.remaining,kind:'card',card:c,key:s.key})));
+    D.e.filter(e=>N.codRemaining(e)>0&&(e.date?.startsWith(td().slice(0,7))||(e.dueDate&&e.dueDate<=dateAt(td().slice(0,7),31)))).forEach(e=>rows.push({label:e.item||e.cat,date:e.dueDate,amount:N.codRemaining(e),kind:'cod',entry:e}));
+    return rows;
+  }
+  N.metrics = (month=td().slice(0,7)) => {
+    const entries=D.e.filter(e=>e.date?.startsWith(month));
+    let paid=entries.reduce((s,e)=>s+cashPart(e),0);
+    paid+=legacyTopups().filter(t=>t.date?.startsWith(month)&&(!t.source||t.source==='現金')).reduce((s,t)=>s+num(t.amount),0);
+    paid+=V.moves.filter(t=>t.date.startsWith(month)&&t.from.startsWith('cash:')).reduce((s,t)=>s+(t.to.startsWith('prepaid:')?num(t.amount):0)+num(t.fee),0);
+    paid+=V.settlements.filter(t=>t.date.startsWith(month)&&t.from.startsWith('cash:')).reduce((s,t)=>s+num(t.amount),0);
+    paid-=V.refunds.filter(t=>t.status==='received'&&t.date.startsWith(month)&&t.to.startsWith('cash:')).reduce((s,t)=>s+num(t.amount),0);
+    const fees=V.moves.filter(t=>t.date.startsWith(month)).reduce((s,t)=>s+num(t.fee),0)+entries.reduce((s,e)=>s+num(e.installment?.fee),0);
+    return {paid:round(paid),consume:round(entries.reduce((s,e)=>s+N.net(e),0)+fees),pending:round(pendingRows().reduce((s,r)=>s+r.amount,0)),cash:round(pendingRows().filter(r=>!r.date||r.date<=dateAt(month,31)).reduce((s,r)=>s+r.amount,0))};
+  };
+  const labels={paid:'本月已支出',pending:'目前待付款',cash:'本月需準備現金',consume:'本月總消費'};
+  N.homeSettings = () => page('首頁設定',`<div class="card"><h2>金額卡片</h2>${V.homeOrder.map((id,i)=>`<div class="v10-setting"><label><input type="checkbox" ${V.hidden.includes(id)?'':'checked'} onchange="Ledger10.hideCard('${id}',!this.checked)">${labels[id]}</label><div>${button('↑',`Ledger10.moveCard(${i},-1)`)}${button('↓',`Ledger10.moveCard(${i},1)`)}</div></div>`).join('')}</div><div class="card">${button('選擇首頁快捷鍵','openShortcutSettings()')}</div>`,'勾選顯示、取消勾選隱藏。上下箭頭調整順序，設定自動儲存。');
+  N.hideCard=(id,hidden)=>{V.hidden=V.hidden.filter(x=>x!==id);if(hidden)V.hidden.push(id);save();};
+  N.moveCard=(i,delta)=>{const j=i+delta;if(j<0||j>=V.homeOrder.length)return;[V.homeOrder[i],V.homeOrder[j]]=[V.homeOrder[j],V.homeOrder[i]];save();N.homeSettings();};
+  const baseHome=home;
+  home=function(){baseHome();const m=N.metrics();Object.entries(m).forEach(([id,value])=>$(id).textContent=fmt(value));
+    V.homeOrder.forEach((id,i)=>{const node=$(id).parentElement;node.style.order=i;node.hidden=V.hidden.includes(id);node.setAttribute('role','button');node.tabIndex=0;node.onclick=()=>openMonthlyMetric(id);node.onkeydown=e=>{if(e.key==='Enter')openMonthlyMetric(id);};});
+    const pending=pendingRows().filter(r=>N.badge(r.date));
+    // Keep draft and receivable reminders; replace legacy rolling credit reminders.
+    Array.from($('reminders').children).filter(n=>n.textContent.includes('繳款提醒－')).forEach(n=>n.remove());
+    $('reminders').insertAdjacentHTML('beforeend',pending.map(r=>`<div class="item">${N.badge(r.date)} <b>${E(r.label)}</b><div>${E(r.date)}｜${fmt(r.amount)}</div>${button('查看待付款',"openMonthlyMetric('pending')")}</div>`).join(''));
+    $('remindersCard').hidden=!$('reminders').children.length;
+    if(!$('v10Version'))$('month').insertAdjacentHTML('afterend','<div id="v10Version" class="muted">V10.0｜帳戶與付款整合版</div>');
+  };
+  openMonthlyMetric=function(type){
+    const m=N.metrics(),month=td().slice(0,7);
+    let html='';
+    if(type==='pending'||type==='cash') {
+      const rows=pendingRows().filter(r=>type!=='cash'||!r.date||r.date<=dateAt(month,31));
+      html=['card','cod'].map(kind=>`<details class="card" open><summary>${kind==='card'?'信用卡待繳':'本月貨到付款'} ${fmt(rows.filter(r=>r.kind===kind).reduce((s,r)=>s+r.amount,0))}</summary>${rows.filter(r=>r.kind===kind).map(r=>`<div class="item"><b>${E(r.label)}</b> ${N.badge(r.date)}<div>${r.date?E(r.date):'未設定付款期限'}｜${fmt(r.amount)}</div>${r.kind==='card'?button('繳款',`Ledger10.payForm('${r.card.id}','${r.key}')`):button('付款／設定期限',`Ledger10.codForm('${r.entry.id}')`)}</div>`).join('')||'<p>目前沒有待付款</p>'}</details>`).join('');
+    }else if(type==='consume') {
+      html=D.e.filter(e=>e.date?.startsWith(month)&&!e.isCreditCardPayment).map(e=>`<div class="card"><b>${E(e.item||e.cat)}</b><div>${E(e.date)}｜${fmt(N.net(e))}</div>${N.actions(D.e.indexOf(e))}</div>`).join('');
+      html+=`<div class="card muted">退款扣回原消費月份；已退款 ${fmt(D.e.filter(e=>e.date?.startsWith(month)).reduce((s,e)=>s+received(e),0))}。轉帳及分期手續費另列入總消費。</div>`;
+    }else {
+      const r=[];
+      D.e.filter(e=>e.date?.startsWith(month)&&cashPart(e)).forEach(e=>r.push([e.date,e.item||e.cat,cashPart(e)]));
+      legacyTopups().filter(t=>t.date?.startsWith(month)&&(!t.source||t.source==='現金')).forEach(t=>r.push([t.date,refName(t.ref)+'加值（舊紀錄）',t.amount]));
+      V.moves.filter(t=>t.date.startsWith(month)&&t.from.startsWith('cash:')).forEach(t=>{if(t.to.startsWith('prepaid:'))r.push([t.date,refName(t.to)+'加值',t.amount]);if(t.fee)r.push([t.date,'轉帳手續費',t.fee]);});
+      V.settlements.filter(t=>t.date.startsWith(month)&&t.from.startsWith('cash:')).forEach(t=>r.push([t.date,'貨到付款',t.amount]));
+      V.refunds.filter(t=>t.status==='received'&&t.date.startsWith(month)&&t.to.startsWith('cash:')).forEach(t=>r.push([t.date,'收到退款',-t.amount]));
+      html=r.map(r=>`<div class="card">${E(r[0])}｜${E(r[1])}<b class="v10-right">${fmt(r[2])}</b></div>`).join('');
+    }
+    page(labels[type]+'明細',`<div class="card"><div class="val">${fmt(m[type])}</div></div>${html}`,'消費、加值、轉帳與信用卡繳款分開計算；未來分期請至信用卡管理查看。');
+  };
+  N.accounts = kind => {
+    const list=kind==='cash'?D.cashAccounts:D.prepaid;
+    page(kind==='cash'?'現金帳戶':'預繳帳戶',`<div class="card v10-actions">${button('＋ 新增帳戶',`Ledger10.accountForm('${kind}')`)}${button('轉帳／加值','Ledger10.transferForm()')}</div>${list.map(a=>{const ref=kind+':'+a.id;return `<div class="card"><div class="top"><h2>${E(a.name)}</h2><b>${fmt(N.balance(ref))}</b></div><div>${a.active===false?'已停用':'使用中'}｜期初 ${fmt(a.openingBalance)}</div><div class="v10-actions">${button('修改',`Ledger10.accountForm('${kind}','${a.id}')`)}${button(a.active===false?'啟用':'停用',`Ledger10.toggleAccount('${ref}')`)}${button('紀錄',`Ledger10.accountHistory('${ref}')`)}${kind==='prepaid'?button('加值',`Ledger10.transferForm('${ref}')`):''}</div></div>`;}).join('')}`,'舊版未指定帳戶的現金交易與現金加值歸入第一個現金帳戶。期初金額是所有紀錄開始前的餘額。');
+  };
+  N.accountForm=(kind,id)=>{const a=(kind==='cash'?D.cashAccounts:D.prepaid).find(a=>String(a.id)===id);N.editAccount={kind,id};modal(a?'修改帳戶':'新增帳戶',field('帳戶名稱',input('aName','text',a?.name||''))+field('期初餘額',input('aOpening','number',a?.openingBalance||0,'step="0.01"'))+field('備註',input('aNote','text',a?.note||'')), 'Ledger10.saveAccount()');};
+  N.saveAccount=()=>{const {kind,id}=N.editAccount,list=kind==='cash'?D.cashAccounts:D.prepaid,a=list.find(a=>String(a.id)===id),name=val('aName').trim(),opening=Number(val('aOpening'));if(!name||!Number.isFinite(opening))return alert('請填名稱與有效期初餘額');if(kind==='prepaid'&&opening<0)return alert('預繳期初餘額不可小於0');if(a){if(kind==='prepaid'){const balance=round(num(a.balance)+opening-num(a.openingBalance));if(balance<0)return alert('期初調整後餘額不足，請核對紀錄');a.balance=balance;}Object.assign(a,{name,openingBalance:opening,note:val('aNote')});}else list.push({id:Date.now(),name,openingBalance:opening,balance:opening,adjustment:0,note:val('aNote'),active:true,transactions:[]});save();closeM('v10Modal');N.accounts(kind);renderPrepaidSelect('eprepaid');};
+  N.toggleAccount=ref=>{const a=account(ref);if(ref===cashRef()&&a.active!==false)return alert('保留第一個現金帳戶以承接舊紀錄');a.active=a.active===false;save();N.accounts(ref.split(':')[0]);};
+  N.accountHistory=ref=>{const rows=[];D.e.forEach(e=>{let amount=0;if(ref.startsWith('cash:')&&cashRef(e)===ref)amount=-cashPart(e);if(ref.startsWith('prepaid:')&&prepaidRef(e.prepaidAccountId)===ref)amount=-num(e.amount);if(amount)rows.push({date:e.date,label:e.item||e.cat,amount});});V.moves.forEach(t=>{if(t.from===ref)rows.push({date:t.date,label:'轉出至 '+refName(t.to),amount:-t.amount-t.fee});if(t.to===ref)rows.push({date:t.date,label:'轉入自 '+refName(t.from),amount:t.amount});});V.refunds.filter(r=>r.status==='received'&&r.to===ref).forEach(r=>rows.push({date:r.date,label:'退款',amount:r.amount}));V.settlements.filter(r=>r.from===ref).forEach(r=>rows.push({date:r.date,label:'货到付款',amount:-r.amount}));page(refName(ref)+'紀錄',`<div class="card"><b>餘額 ${fmt(N.balance(ref))}</b></div>${rows.sort((a,b)=>b.date.localeCompare(a.date)).map(r=>`<div class="card">${E(r.date)}｜${E(r.label)}<b class="v10-right">${fmt(r.amount)}</b></div>`).join('')}`,'餘額另包含期初設定與舊版加值／調整紀錄。');};
+  N.transferForm=(to='')=>modal('轉帳／加值',field('日期',input('xDate','date',td()))+field('轉出帳戶',`<select id="xFrom">${opts(accounts(true),cashRef())}</select>`)+field('轉入帳戶',`<select id="xTo">${opts(accounts(),to)}</select>`)+field('金額',input('xAmount','number','','min="0.01" step="0.01"'))+field('手續費（另計消費）',input('xFee','number',0,'min="0" step="0.01"'))+field('備註',input('xNote','text')),'Ledger10.transfer()');
+  N.transfer=()=>{const from=val('xFrom'),to=val('xTo'),amount=Number(val('xAmount')),fee=Number(val('xFee')),date=val('xDate');if(!account(from)||!account(to)||from===to||!validAmount(amount)||!validAmount(fee,true)||!validDate(date))return alert('請確認帳戶、金額與日期；轉出入帳戶不可相同');if(from.startsWith('card:')&&!to.startsWith('prepaid:'))return alert('信用卡僅用於預繳帳戶加值');if(!enough(from,amount+fee))return;const t={id:uid(),from,to,amount,fee,date,note:val('xNote')};prepaidChange(from,-amount-fee,'transfer','轉出',t.id,date);prepaidChange(to,amount,'topup','轉入／加值',t.id,date);V.moves.push(t);save();closeM('v10Modal');N.transfers();};
+  N.transfers=()=>page('轉帳／加值',`<div class="card">${button('＋ 轉帳／加值','Ledger10.transferForm()')}</div>${V.moves.slice().reverse().map(t=>`<div class="card"><b>${E(refName(t.from))} → ${E(refName(t.to))}</b><div>${E(t.date)}｜${fmt(t.amount)}${t.fee?'｜手續費 '+fmt(t.fee):''}</div><div>${E(t.note)}</div>${button('取消這筆',`Ledger10.undoTransfer('${t.id}')`)}</div>`).join('')}`,'轉帳及加值不計消費；手續費計入消費。信用卡加值列入信用卡帳單。');
+  N.undoTransfer=id=>{const t=V.moves.find(t=>t.id===id);if(!t||!enough(t.to,t.amount)||!confirm('取消這筆轉帳並還原兩邊餘額？'))return;prepaidChange(t.to,-t.amount,'reversal','取消轉入',id);prepaidChange(t.from,t.amount+t.fee,'reversal','取消轉出',id);V.moves=V.moves.filter(x=>x!==t);save();N.transfers();};
+  openCashAccountManager=()=>N.accounts('cash');renderCashAccountsV2=openCashAccountManager;
+  openPrepaidAccountManager=()=>N.accounts('prepaid');renderPrepaidAccountsV2=openPrepaidAccountManager;renderPrepaidAccounts=openPrepaidAccountManager;
+  createPrepaidAccount=()=>N.accountForm('prepaid');topupPrepaidAccount=id=>N.transferForm(prepaidRef(id));
+  N.cardForm=id=>{const c=D.cards.find(c=>String(c.id)===String(id));N.cardEdit=c?.id;modal('信用卡設定',field('銀行／卡片名稱',input('cName','text',c?.name||''))+field('結帳日（1～31）',input('cClose','number',c?.closeDay||'','min="1" max="31"'))+field('繳款日（1～31）',input('cDue','number',c?.dueDay||'','min="1" max="31"')),'Ledger10.saveCard()');};
+  N.saveCard=()=>{const name=val('cName').trim(),close=Number(val('cClose')),due=Number(val('cDue'));if(!name||![close,due].every(n=>Number.isInteger(n)&&n>=1&&n<=31))return alert('請填卡片名稱，日期需1～31');const c=D.cards.find(c=>c.id===N.cardEdit);if(D.cards.some(a=>a!==c&&a.name===name))return alert('卡片名稱不可重複');if(c){const old=c.name;D.e.forEach(e=>{if(e.card===old)e.card=name;arr(e.paymentParts).forEach(p=>{if(p.pay==='信用卡－'+old)p.pay='信用卡－'+name;});});Object.assign(c,{name,closeDay:close,statementDay:close,dueDay:due});}else D.cards.push({id:Date.now(),name,closeDay:close,statementDay:close,dueDay:due,paidStatements:[],active:true});save();closeM('v10Modal');N.cards();};
+  N.cards=selected=>{const c=D.cards.find(c=>String(c.id)===String(selected))||D.cards[0];page('信用卡管理',`<div class="card">${field('銀行／信用卡',`<select onchange="Ledger10.cards(this.value)">${D.cards.map(a=>`<option value="${a.id}" ${a===c?'selected':''}>${E(a.name)}</option>`).join('')}</select>`)}${button('＋ 新增信用卡','Ledger10.cardForm()')}</div>${c?`<div class="card"><h2>${E(c.name)}</h2><div>結帳 ${c.closeDay||'未設定'} 日｜繳款 ${c.dueDay||'未設定'} 日</div><div class="v10-actions">${button('修改',`Ledger10.cardForm('${c.id}')`)}${button(c.active===false?'啟用':'停用',`Ledger10.toggleCard('${c.id}')`)}</div></div>${N.statements(c).map(s=>`<details class="card" ${!s.key||s.key<=td()?'open':''}><summary>${s.key?E(s.key)+' 結帳':'未設定帳期'}｜${s.key>td()?'未出帳':'已出帳'} ${N.badge(s.remaining?s.due:'')}</summary><p>應繳 ${fmt(s.total)}｜已繳 ${fmt(s.paid)}｜退款折抵 ${fmt(s.credit)}<br>未繳 ${fmt(s.remaining)}｜期限 ${s.due||'未設定'}</p>${s.rows.map(r=>`<div class="item">${E(r.label)} ${r.count>1?`第${r.part}/${r.count}期`:''}｜${fmt(r.amount)}</div>`).join('')}${s.remaining?button('繳款',`Ledger10.payForm('${c.id}','${s.key}')`):'<b>已結清</b>'}</details>`).join('')}${N.planSummary(c)}`:'<div class="card">請新增信用卡</div>'}`,'刷卡日預設為入帳日；可在支出「更多」指定帳期。每月不足指定日期時使用月底。');};
+  N.toggleCard=id=>{const c=D.cards.find(c=>String(c.id)===id);c.active=c.active===false;save();N.cards(id);};
+  N.planSummary=c=>D.e.filter(e=>e.installment&&e.card===c.name).map(e=>{const ss=N.statements(c),rows=ss.flatMap(s=>s.rows.filter(r=>r.entry===e).map(r=>({...r,paid:r.remaining===0}))),paid=rows.filter(r=>r.paid).length;return `<div class="card"><h3>${E(e.item||e.cat)}｜分期</h3><div>消費總額 ${fmt(e.amount)}｜手續費 ${fmt(e.installment.fee)}</div><div>共 ${rows.length} 期｜已繳 ${paid} 期｜剩餘 ${rows.length-paid} 期</div><div>剩餘金額 ${fmt(rows.reduce((s,r)=>s+r.remaining,0))}</div><div class="muted">部分繳款依帳單明細順序分配；該期金額繳清才計為已繳。</div></div>`;}).join('');
+  N.payForm=(id,key)=>{const c=D.cards.find(c=>String(c.id)===String(id)),s=N.statements(c).find(s=>s.key===key);if(!s||s.remaining<=0)return alert('此期已結清');N.payment={id:c.id,key};modal('信用卡繳款',`<p>${E(c.name)}｜未繳 ${fmt(s.remaining)}</p>`+field('付款帳戶',`<select id="pFrom">${opts(accounts().filter(a=>a.ref.startsWith('cash:')),cashRef())}</select>`)+field('實際繳款日期',input('pDate','date',td()))+field('繳款金額',input('pAmount','number',s.remaining,'step="0.01"')),'Ledger10.pay()');};
+  N.pay=()=>{const c=D.cards.find(c=>c.id===N.payment.id),s=N.statements(c).find(s=>s.key===N.payment.key),amount=Number(val('pAmount')),date=val('pDate'),from=val('pFrom');if(!s||!validAmount(amount)||amount>s.remaining||!validDate(date)||!account(from))return alert('請確認日期及金額，金額不得超過未繳金額');D.e.push({id:uid(),date,item:c.name+'信用卡繳款',cat:'信用卡繳款',amount,pay:'現金',cashAccountId:account(from).id,isCreditCardPayment:true,creditCardId:c.id,cardStatementKey:s.key,proxy:0});save();closeM('v10Modal');N.cards(c.id);};
+  openCreditCardManagerV2=N.cards;renderCreditCardManagerV2=N.cards;renderCreditCards=N.cards;editCreditCard=N.cardForm;
+  payCreditCardBill=id=>{const c=D.cards.find(c=>c.id===id),s=c&&N.statements(c).find(s=>s.remaining>0&&s.key<=td());if(s)N.payForm(id,s.key);else alert('沒有可繳帳單');};
+  N.codForm=id=>{const e=D.e.find(e=>e.id===id);N.codId=id;modal('貨到付款',`<p>${E(e.item||e.cat)}｜待付 ${fmt(N.codRemaining(e))}</p>`+field('付款期限（可留白）',input('codDue','date',e.dueDate||''))+button('只儲存期限','Ledger10.codDue()')+field('實際付款日期',input('codDate','date',td()))+field('付款帳戶',`<select id="codFrom">${opts(accounts(),cashRef())}</select>`)+field('本次付款金額',input('codAmount','number',N.codRemaining(e),'step="0.01"')),'Ledger10.codPay()');};
+  N.codDue=()=>{const e=D.e.find(e=>e.id===N.codId);if(val('codDue')&&!validDate(val('codDue')))return alert('日期無效');e.dueDate=val('codDue');save();closeM('v10Modal');openMonthlyMetric('pending');};
+  N.codPay=()=>{const e=D.e.find(e=>e.id===N.codId),amount=Number(val('codAmount')),from=val('codFrom'),date=val('codDate');if(!validAmount(amount)||amount>N.codRemaining(e)||!validDate(date)||!account(from))return alert('請確認金額、日期與帳戶');if(!enough(from,amount))return;const s={id:uid(),entryId:e.id,from,amount,date};prepaidChange(from,-amount,'spend','貨到付款',s.id,date);V.settlements.push(s);e.dueDate=val('codDue');save();closeM('v10Modal');openMonthlyMetric('pending');};
+  N.actions=i=>`<div class="v10-actions">${button('更多',`Ledger10.entry(${i})`)}</div>`;
+  const oldRecent=recentRecord;recentRecord=e=>oldRecent(e)+N.actions(D.e.indexOf(e));
+  N.entry=i=>{const e=D.e[i];if(!e)return;const refunds=V.refunds.filter(r=>r.entryId===e.id);modal(E(e.item||e.cat),`<p>原金額 ${fmt(e.amount)}｜已退款 ${fmt(received(e))}｜退款後 ${fmt(e.amount-received(e))}</p><div class="v10-actions">${!e.isCreditCardPayment?button('複製支出',`Ledger10.copy(${i})`)+button('存為範本',`Ledger10.templateForm(${i})`)+button('退款／退貨',`Ledger10.refundForm(${i})`):''}${e.pay==='信用卡'?button('分期／帳期',`Ledger10.planForm(${i})`):''}${N.codRemaining(e)>0?button('貨到付款',`Ledger10.codForm('${e.id}')`):''}</div>${refunds.map(r=>`<div class="item"><b>${r.status==='received'?'已收到退款':'退貨待退款'}</b> ${fmt(r.amount)}<div>${E(r.date)}｜${E(refName(r.to))}｜${E(r.note||'')}</div>${r.status==='pending'?button('登記收到退款',`Ledger10.receiveRefund('${r.id}')`):''}${button('取消紀錄',`Ledger10.cancelRefund('${r.id}')`)}</div>`).join('')}`);};
+  function snapshot(e) {return {cat:e.cat,item:e.item,amount:e.amount,pay:e.pay,card:e.card,cashAccountId:e.cashAccountId,prepaidAccountId:e.prepaidAccountId,paymentParts:e.paymentParts?structuredClone(e.paymentParts):null};}
+  function fill(data) {openExpense();if(!D.cats.includes(data.cat))return alert('原分類已刪除，請重新選擇');$('ecat').value=data.cat;renderExpenseItems();if(data.item&&![...$('eitem').options].some(o=>o.value===data.item))$('eitem').add(new Option(data.item,data.item));$('eitem').value=data.item||'';$('eamt').value=data.amount;$('epay').value=data.pay;cardToggle();$('ecard').value=data.card||'';$('eprepaid').value=String(data.prepaidAccountId||'');$('vCash').value=String(data.cashAccountId||D.cashAccounts[0]?.id);if(data.paymentParts){data.paymentParts.slice(0,2).forEach((p,i)=>{$('emixpay'+(i+1)).value=p.pay;$('emixamt'+(i+1)).value=p.amount;});}N.paymentFields();}
+  N.copy=i=>{closeM('v10Modal');fill(snapshot(D.e[i]));};
+  N.templateForm=(i,id)=>{const t=V.templates.find(t=>t.id===id)||{data:D.e[i]||{}};N.templateEditing={i,id};modal(id?'修改範本':'存為常用範本',field('範本名稱',input('tName','text',t?.name||D.e[i]?.item||''))+field('大分類',`<select id="tCat">${D.cats.map(c=>`<option ${c===(t?.data.cat||D.e[i]?.cat)?'selected':''}>${E(c)}</option>`).join('')}</select>`)+field('項目',input('tItem','text',t?.data.item||D.e[i]?.item||''))+field('金額',input('tAmount','number',t?.data.amount||D.e[i]?.amount||'','step="0.01"'))+field('付款帳戶',`<select id="tAccount">${opts(accounts(true),t?.data.pay==='信用卡'?cardRef(D.cards.find(c=>c.name===t.data.card)?.id):t?.data.pay==='預繳帳戶'?prepaidRef(t.data.prepaidAccountId):cashRef(t?.data||D.e[i]))}</select>`),'Ledger10.saveTemplate()');};
+  N.saveTemplate=()=>{const {i,id}=N.templateEditing,name=val('tName').trim(),amount=Number(val('tAmount')),ref=val('tAccount'),a=account(ref);if(!name||!validAmount(amount)||!a)return alert('請填名稱、金額與帳戶');const data={cat:val('tCat'),item:val('tItem'),amount,pay:ref.startsWith('card:')?'信用卡':ref.startsWith('prepaid:')?'預繳帳戶':'現金',card:ref.startsWith('card:')?a.name:'',cashAccountId:ref.startsWith('cash:')?a.id:null,prepaidAccountId:ref.startsWith('prepaid:')?a.id:null};const t=V.templates.find(t=>t.id===id);if(t)Object.assign(t,{name,data});else V.templates.push({id:uid(),name,data});save();closeM('v10Modal');N.templates();};
+  N.templates=()=>{closeM('expenseM');page('常用支出範本',V.templates.map(t=>`<div class="card"><b>${E(t.name)}</b><p>${E(t.data.cat)}｜${E(t.data.item)}｜${fmt(t.data.amount)}｜${E(t.data.pay)}</p><div class="v10-actions">${button('套用',`Ledger10.useTemplate('${t.id}')`)}${button('修改',`Ledger10.templateForm(-1,'${t.id}')`)}${button('刪除',`Ledger10.deleteTemplate('${t.id}')`)}</div></div>`).join('')||'<div class="card">在支出明細點「更多 → 存為範本」。</div>');};
+  N.useTemplate=id=>fill(V.templates.find(t=>t.id===id).data);
+  N.deleteTemplate=id=>{if(!confirm('刪除此範本？原支出會保留。'))return;V.templates=V.templates.filter(t=>t.id!==id);save();N.templates();};
+  N.refundForm=i=>{const e=D.e[i],reserved=V.refunds.filter(r=>r.entryId===e.id).reduce((s,r)=>s+r.amount,0);N.refundEntry=e.id;modal('退款／退貨',`<p>原支出：${E(e.item||e.cat)}｜可登記 ${fmt(e.amount-reserved)}</p>`+field('狀態','<select id="rStatus"><option value="pending">退貨待退款</option><option value="received">已收到退款</option></select>')+field('日期',input('rDate','date',td()))+field('退款金額（全額或部分）',input('rAmount','number',round(e.amount-reserved),'step="0.01"'))+field('其中屬於我的退款金額',input('rOwn','number',Math.min(round(e.amount-reserved),Math.max(0,N.net(e))),'step="0.01"'))+field('退回帳戶',`<select id="rTo">${opts(accounts(true),e.pay==='信用卡'?cardRef(D.cards.find(c=>c.name===e.card)?.id):e.pay==='預繳帳戶'?prepaidRef(e.prepaidAccountId):cashRef(e))}</select>`)+field('備註',input('rNote','text')),'Ledger10.saveRefund()');};
+  N.saveRefund=()=>{const e=D.e.find(e=>e.id===N.refundEntry),amount=Number(val('rAmount')),own=Number(val('rOwn')),date=val('rDate'),to=val('rTo'),reserved=V.refunds.filter(r=>r.entryId===e.id).reduce((s,r)=>s+r.amount,0);if(!validAmount(amount)||!validAmount(own,true)||own>amount||amount+reserved>e.amount+0.001||!validDate(date)||!account(to))return alert('請確認退款金額、我的退款金額、日期與帳戶；累計不得超過原消費');const alreadyOwn=V.refunds.filter(r=>r.entryId===e.id).reduce((s,r)=>s+num(r.ownAmount??r.amount),0);if(own+alreadyOwn>e.amount-num(e.proxy)+0.001)return alert('我的退款累計不得超過原本自己的消費');if(N.codRemaining(e)>0)return alert('這筆尚有貨到付款未付清，請先核對付款；未付款取消不應記為收到退款');const r={id:uid(),entryId:e.id,amount,ownAmount:own,date,to,status:val('rStatus'),note:val('rNote')};if(r.status==='received')prepaidChange(to,amount,'refund','退款',r.id,date);V.refunds.push(r);save();closeM('v10Modal');N.entry(D.e.indexOf(e));};
+  N.receiveRefund=id=>{const r=V.refunds.find(r=>r.id===id);N.receiving=id;modal('收到退款',field('實際退款日期',input('rrDate','date',td()))+field('退回帳戶',`<select id="rrTo">${opts(accounts(true),r.to)}</select>`),'Ledger10.receiveRefundSave()');};
+  N.receiveRefundSave=()=>{const r=V.refunds.find(r=>r.id===N.receiving);if(!r||r.status!=='pending')return;if(!validDate(val('rrDate'))||!account(val('rrTo')))return alert('請確認日期與帳戶');r.date=val('rrDate');r.to=val('rrTo');r.status='received';prepaidChange(r.to,r.amount,'refund','退款',r.id,r.date);save();closeM('v10Modal');N.entry(D.e.findIndex(e=>e.id===r.entryId));};
+  N.cancelRefund=id=>{const r=V.refunds.find(r=>r.id===id);if(!r||!confirm('取消這筆退款紀錄並還原餘額？'))return;if(r.status==='received'){if(!enough(r.to,r.amount))return;prepaidChange(r.to,-r.amount,'reversal','取消退款',r.id);}V.refunds=V.refunds.filter(x=>x!==r);save();N.entry(D.e.findIndex(e=>e.id===r.entryId));};
+  N.planForm=i=>{const e=D.e[i],c=D.cards.find(c=>c.name===e.card);if(!c?.closeDay)return alert('請先在信用卡管理設定結帳日');N.planIndex=i;modal('分期／帳期',field('指定首期結帳月份',input('planMonth','month',e.installment?.firstMonth||e.statementOverride?.slice(0,7)||statementFor(e.date,c).slice(0,7)))+field('期數（1為不分期）',input('planCount','number',e.installment?.count||1,'min="1" max="120"'))+field('全部分期手續費／利息',input('planFee','number',e.installment?.fee||0,'min="0" step="0.01"'))+'<p class="muted">本金平均分攤，尾期調整小數差額。總消費只計一次。</p>','Ledger10.savePlan()');};
+  N.savePlan=()=>{const e=D.e[N.planIndex],c=D.cards.find(c=>c.name===e.card),count=Number(val('planCount')),fee=Number(val('planFee')),first=val('planMonth');if(!Number.isInteger(count)||count<1||count>120||!validAmount(fee,true)||!/^\d{4}-\d{2}$/.test(first))return alert('請確認月份、期數及手續費');if(D.e.some(p=>p.isCreditCardPayment&&String(p.creditCardId)===String(c.id))&&!confirm('此卡已有繳款紀錄，調整後會重新分配帳期；請依銀行帳單核對。'))return;if(count===1&&fee)return alert('非分期請將分期手續費填0');e.statementOverride=dateAt(first,c.closeDay);e.installment=count>1?{count,fee,firstMonth:first}:null;save();closeM('v10Modal');N.cards(c.id);};
+  const oldOpen=openExpense;
+  openExpense=function(){oldOpen();$('vCash').innerHTML=D.cashAccounts.filter(a=>a.active!==false).map(a=>`<option value="${a.id}">${E(a.name)}</option>`).join('');$('vDue').value='';$('vCount').value=1;$('vFee').value=0;$('vFirst').value='';N.paymentFields();};
+  N.paymentFields=()=>{const pay=val('epay');$('vCashField').hidden=!['現金','複合'].includes(pay);$('vDueField').hidden=!['貨到付款','複合'].includes(pay);$('vPlanFields').hidden=pay!=='信用卡';};
+  const oldToggle=cardToggle;cardToggle=function(){oldToggle();if($('vCash'))N.paymentFields();};
+  let saving=false;
+  saveExpense=async function(){
+    if(saving)return;
+    if(!normalizeExpenseDate())return alert('日期請輸入6碼 yymmdd');
+    const amount=Number(val('eamt')),pay=val('epay'),date=val('edate'),count=Number(val('vCount')),fee=Number(val('vFee')),first=val('vFirst'),card=D.cards.find(c=>c.name===val('ecard'));
+    if(!validDate(date))return alert('請輸入有效日期');
+    if(amount>0&&!validAmount(amount))return alert('金額最多兩位小數');
+    if(pay==='信用卡'&&amount>0&&!card)return alert('請選擇信用卡');
+    if(pay==='信用卡'&&(!Number.isInteger(count)||count<1||count>120||!validAmount(fee,true)))return alert('請確認分期期數與手續費');
+    if(pay==='信用卡'&&count>1&&!card?.closeDay)return alert('分期前請先設定信用卡結帳日');
+    if(pay==='信用卡'&&count===1&&fee)return alert('非分期請將分期手續費填0');
+    if(pay==='複合'&&(!val('emixpay1')||!val('emixpay2')))return alert('請選擇兩種付款方式');
+    if(pay==='預繳帳戶'&&amount>0&&!enough(prepaidRef(val('eprepaid')),amount))return;
+    const meta={cashAccountId:Number(val('vCash')),dueDate:val('vDue'),calendarSync:$('ecalendar').checked,time:val('etime')};
+    if(meta.dueDate&&!validDate(meta.dueDate))return alert('付款期限無效');
+    if(pay==='信用卡'&&count>1)meta.installment={count,fee,firstMonth:first||statementFor(date,card).slice(0,7)};
+    const before=D.e.length;saving=true;
+    try { await _saveExpense();if(D.e.length===before)return;const e=D.e.at(-1);Object.assign(e,meta);save();if(meta.calendarSync)openGoogleCalendar({summary:e.item||e.cat,startDate:e.date,startTime:e.time,description:`日常隨手記帳｜${fmt(e.amount)}`}); }
+    finally{saving=false;}
+  };
+  const originalDelete=deleteFormal,originalAmount=editFormalAmount,originalPayment=editFormalPayment;
+  const linked=e=>V.refunds.some(r=>r.entryId===e.id)||V.settlements.some(s=>s.entryId===e.id)||!!e.installment;
+  deleteFormal=async i=>{if(linked(D.e[i]))return alert('這筆有退款、付款或分期連結，請先取消相關紀錄／分期，再刪除原支出');return originalDelete(i);};
+  editFormalAmount=i=>{if(linked(D.e[i]))return alert('這筆有退款、付款或分期連結，請先處理相關紀錄再修改金額');if(D.e[i]?.pay==='複合')return alert('複合付款需同時核對兩項金額，請複製建立正確紀錄後刪除舊筆');return originalAmount(i);};
+  editFormalPayment=i=>{if(linked(D.e[i]))return alert('這筆有退款、付款或分期連結，請先處理相關紀錄再修改付款');return originalPayment(i);};
+  // Guard against changing historical names while keeping all references intact.
+  deleteCashAccountV2=id=>N.toggleAccount('cash:'+id);deletePrepaidAccountV2=id=>N.toggleAccount(prepaidRef(id));deleteCreditCardV2=N.toggleCard;
+  document.body.insertAdjacentHTML('beforeend','<div id="v10Modal" class="modal"></div>');
+  $('eprepaidbox').insertAdjacentHTML('afterend',`<div id="vCashField">${field('現金付款帳戶',`<select id="vCash"></select>`)}</div><div id="vDueField">${field('付款期限（可留白）',input('vDue','date'))}</div><div id="vPlanFields"><details><summary>信用卡分期（選填）</summary><div class="v10-grid">${field('期數',input('vCount','number',1,'min="1" max="120"'))}${field('全部手續費／利息',input('vFee','number',0,'min="0" step="0.01"'))}</div>${field('首期結帳月份（留白自動判斷）',input('vFirst','month'))}</details></div>`);
+  $('expenseM').querySelector('.sheet-title-row').insertAdjacentHTML('afterend',`<div class="v10-actions">${button('套用常用範本','Ledger10.templates()')}</div>`);
+  const groups=document.querySelectorAll('.side-group-body');
+  groups[0].insertAdjacentHTML('beforeend',`<button class="side-link" onclick="Ledger10.transfers()">轉帳／加值</button>`);
+  groups[1].insertAdjacentHTML('beforeend',`<button class="side-link" onclick="Ledger10.templates()">常用支出範本</button>`);
+  groups[2].insertAdjacentHTML('beforeend',`<button class="side-link" onclick="Ledger10.homeSettings()">首頁設定</button>`);
+  // Save a one-time local rollback copy before the first v10 write.
+  if(!localStorage.getItem('ledger-v10-before')&&localStorage.getItem(K))try{localStorage.setItem('ledger-v10-before',localStorage.getItem(K));}catch(_){}
+  home();
+})();
+</script><script>/* V10 extra tools: settlements, backup, photo controls, filters and analysis. */
+(() => {
+ const N=Ledger10,S=D.v10,E=esc,n=v=>Number(v)||0,round=v=>Math.round(v*100)/100;
+ const f=v=>'$'+n(v).toLocaleString('zh-TW',{maximumFractionDigits:2});
+ const u=()=>recordUid('extra'),v=id=>$(id)?.value||'';
+ const btn=(label,action)=>`<button type="button" onclick="${action}">${label}</button>`;
+ const field=(label,html)=>`<div class="field"><label>${label}</label>${html}</div>`;
+ const inp=(id,type,value='',extra='')=>`<input id="${id}" type="${type}" value="${E(value)}" ${extra}>`;
+ const page=(title,html,note='')=>{closeSideMenu();show('generic');$('gtitle').textContent=title;$('gtext').textContent=note;$('gtext').hidden=!note;$('genericList').innerHTML=html;};
+ const modal=(title,html,action)=>{$('v10Modal').innerHTML=`<div class="sheet"><div class="top"><h2>${title}</h2>${btn('取消',"closeM('v10Modal')")}</div>${html}${action?`<button class="v10-primary" onclick="${action}">儲存</button>`:''}</div>`;openM('v10Modal');};
+ S.trash||=[];S.inactiveCats||=[];S.inactiveItems||=[];
+ function save(){persist();}
+ function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+ N.receipts=book=>book.receipts||=[];
+ N.bookBalances=book=>{const data=Object.fromEntries(book.members.map(p=>[p,{p,paid:0,owed:0,net:0}]));book.entries.filter(e=>!e.draft).forEach(e=>{if(data[e.payer])data[e.payer].paid+=n(e.amount);e.shares.forEach(s=>{if(data[s.p])data[s.p].owed+=n(s.a);});});Object.values(data).forEach(a=>a.net=round(a.paid-a.owed));N.receipts(book).forEach(r=>{if(data[r.from])data[r.from].net=round(data[r.from].net+n(r.amount));if(data[r.to])data[r.to].net=round(data[r.to].net-n(r.amount));});return Object.values(data);};
+ N.bookTransfers=book=>{const a=N.bookBalances(book),debt=a.filter(x=>x.net<-.005).map(x=>({...x})),credit=a.filter(x=>x.net>.005).map(x=>({...x})),rows=[];let i=0,j=0;while(i<debt.length&&j<credit.length){let amount=round(Math.min(-debt[i].net,credit[j].net));rows.push({from:debt[i].p,to:credit[j].p,amount});debt[i].net=round(debt[i].net+amount);credit[j].net=round(credit[j].net-amount);if(Math.abs(debt[i].net)<.005)i++;if(Math.abs(credit[j].net)<.005)j++;}return rows;};
+ settle=()=>{const balances=N.bookBalances(B),transfers=N.bookTransfers(B);$('detailBody').innerHTML=`<div class="card"><h2>成員結算</h2>${balances.map(a=>`<div class="item top"><span>${E(a.p)}<small class="muted">｜負擔 ${f(a.owed)}</small></span><b>${a.net>=0?'應收':'應付'} ${f(Math.abs(a.net))}</b></div>`).join('')}</div><div class="card"><h2>誰付給誰</h2>${transfers.map(r=>`<div class="item"><b>${E(r.from)} → ${E(r.to)}：${f(r.amount)}</b></div>`).join('')||'<p>已結清</p>'}<div class="v10-actions">${btn('登記部分／全部收款','Ledger10.bookReceiptForm()')}${btn('分享結算文字','Ledger10.shareBook()')}</div></div><div class="card"><h2>收款紀錄</h2>${N.receipts(B).map(r=>`<div class="item">${E(r.date)}｜${E(r.from)} → ${E(r.to)} ${f(r.amount)} ${btn('取消',`Ledger10.undoReceipt('${r.id}')`)}</div>`).join('')||'尚無收款'}</div><div class="card"><h2>訂金與尾款</h2>${B.entries.map((e,i)=>`<div class="item">${E(e.item)}｜總額 ${f(e.amount)}｜已付 ${f(N.tempPaid(e))}｜未付 ${f(e.amount-N.tempPaid(e))} ${btn('付款紀錄',`Ledger10.tempPayments(${i})`)}</div>`).join('')}</div>${btn('匯入正式帳本','preview()')}`;};
+ N.bookReceiptForm=()=>{const rows=N.bookTransfers(B),r=rows[0];modal('分攤收款',field('付款人',`<select id="bFrom">${B.members.map(p=>`<option ${p===r?.from?'selected':''}>${E(p)}</option>`).join('')}</select>`)+field('收款人',`<select id="bTo">${B.members.map(p=>`<option ${p===r?.to?'selected':''}>${E(p)}</option>`).join('')}</select>`)+field('日期',inp('bReceiptDate','date',td()))+field('本次收到金額',inp('bReceived','number',r?.amount||'','step="0.01"')),'Ledger10.bookReceiptSave()');};
+ N.bookReceiptSave=()=>{const from=v('bFrom'),to=v('bTo'),amount=Number(v('bReceived')),a=N.bookBalances(B),debtor=a.find(x=>x.p===from),creditor=a.find(x=>x.p===to);if(from===to||!Number.isFinite(amount)||amount<=0||amount>Math.min(-debtor.net,creditor.net)+.001||!v('bReceiptDate'))return alert('請確認付款人、收款人及金額，不得超過尚未結清金額');N.receipts(B).push({id:u(),from,to,amount:round(amount),date:v('bReceiptDate')});save();closeM('v10Modal');settle();};
+ N.undoReceipt=id=>{if(!confirm('取消這筆收款紀錄？'))return;B.receipts=N.receipts(B).filter(r=>r.id!==id);save();settle();};
+ N.shareBook=async()=>{const text=[B.name,'分攤結算',...N.bookTransfers(B).map(r=>`${r.from} → ${r.to}：${f(r.amount)}`),'更新：'+td()].join('\n');if(navigator.share){try{await navigator.share({title:B.name,text});return;}catch(e){if(e.name==='AbortError')return;}}modal('複製結算文字',`<textarea rows="9" style="width:100%">${E(text)}</textarea>`);};
+ N.tempPaid=e=>e.vendorPayments?round(e.vendorPayments.reduce((s,p)=>s+n(p.amount),0)):round(tempPaymentParts(e).filter(p=>p.pay!=='貨到付款').reduce((s,p)=>s+n(p.amount),0));
+ N.tempPayments=i=>{N.tempIndex=i;const e=B.entries[i];modal('訂金／尾款',`<p>${E(e.item)}｜總額 ${f(e.amount)}｜已付 ${f(N.tempPaid(e))}｜未付 ${f(e.amount-N.tempPaid(e))}</p><p class="muted">第一次登記時，請將已付訂金與本次付款合計填入；之後每次只填新增付款。</p>${(e.vendorPayments||[]).map(p=>`<div class="item">${E(p.date)}｜${E(p.pay)} ${f(p.amount)}</div>`).join('')}`+field(e.vendorPayments?'本次付款金額':'目前實際已付金額（可為0）',inp('vendorAmount','number',e.vendorPayments?'':N.tempPaid(e),'step="0.01"'))+field('付款日期',inp('vendorDate','date',td()))+field('付款方式',`<select id="vendorPay"><option>現金</option>${e.payer==='我'?D.cards.map(c=>`<option>${E('信用卡－'+c.name)}</option>`).join(''):''}</select>`),'Ledger10.saveTempPayment()');};
+ N.saveTempPayment=()=>{const e=B.entries[N.tempIndex],amount=Number(v('vendorAmount'));if(!Number.isFinite(amount)||amount<0||amount+(e.vendorPayments?N.tempPaid(e):0)>e.amount+.001||!v('vendorDate'))return alert('付款金額不得超過剩餘尾款');e.vendorPayments||=[];if(amount)e.vendorPayments.push({id:u(),amount:round(amount),date:v('vendorDate'),pay:v('vendorPay')});const payments=e.vendorPayments.map(p=>({pay:p.pay,amount:p.amount})),remaining=round(e.amount-N.tempPaid(e));if(remaining>0)payments.push({pay:'貨到付款',amount:remaining});e.pay='複合';e.paymentParts=payments;save();closeM('v10Modal');detail();};
+ const priorDetail=detail;detail=()=>{priorDetail();Array.from($('detailBody').children).forEach((el,i)=>{if(B.entries[i])el.insertAdjacentHTML('beforeend',`<div class="v10-actions">${btn('訂金／尾款',`Ledger10.tempPayments(${i})`)}</div>`);});};
+ const oldImport=doImport;doImport=()=>{if(B.entries.some(e=>e.vendorPayments&&e.vendorPayments.some(p=>p.date!==e.date))&&!confirm('匯入後消費保留原消費日期；分次付款日期保存在臨時帳本紀錄。繼續匯入？'))return;oldImport();};
+ // Photo viewing never modifies the stored original.
+ N.photoIndex=0;N.photoZoom=1;N.photoAngle=0;
+ const oldFull=openFullPhoto;openFullPhoto=i=>{N.photoIndex=i;N.photoZoom=1;N.photoAngle=0;oldFull(i);N.photoTransform();};
+ N.photoTransform=()=>{const image=$('photoFullStrip')?.children[N.photoIndex]?.querySelector('img');if(image){image.style.transform=`rotate(${N.photoAngle}deg)`;image.style.width=`${N.photoZoom*100}%`;image.style.maxWidth='none';image.style.maxHeight='none';image.parentElement.style.overflow='auto';}};
+ N.zoomPhoto=delta=>{N.photoZoom=Math.max(1,Math.min(4,N.photoZoom+delta));N.photoTransform();};N.rotatePhoto=()=>{N.photoAngle=(N.photoAngle+90)%360;N.photoTransform();};
+ $('photoFullStrip').insertAdjacentHTML('beforebegin',`<div class="v10-actions">${btn('放大＋','Ledger10.zoomPhoto(.5)')}${btn('縮小－','Ledger10.zoomPhoto(-.5)')}${btn('旋轉↻','Ledger10.rotatePhoto()')}</div>`);
+ N.ocrForm=()=>{modal('收據辨識',`<p>選擇收據照片，辨識後可確認金額與日期再帶入。</p><input id="ocrFile" type="file" accept="image/*" onchange="Ledger10.ocr(this.files[0])"><p id="ocrStatus" role="status"></p><div id="ocrResult"></div>`);};
+ N.ocr=async file=>{if(!file)return;const status=$('ocrStatus');status.textContent='正在載入辨識工具…';let worker;try{if(!window.Tesseract){await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./ocr/tesseract.min.js';s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});}worker=await Tesseract.createWorker('eng+chi_tra',1,{workerPath:'./ocr/worker.min.js',corePath:'./ocr/core',langPath:'./ocr/lang',logger:m=>{if(m.status==='recognizing text')status.textContent='辨識中 '+Math.round(m.progress*100)+'%';}});const result=await worker.recognize(file),text=result.data.text;const candidates=[...text.matchAll(/(?:total|amount|合計|總計|總額|金額|NT\$|\$)\s*[:：]?\s*([\d,]+(?:\.\d{1,2})?)/gi)].map(m=>Number(m[1].replaceAll(',','')));const date=text.match(/(20\d{2})[\/.-](\d{1,2})[\/.-](\d{1,2})/);$('ocrResult').innerHTML=field('總金額（請核對）',inp('ocrAmount','number',candidates.at(-1)||'','step="0.01"'))+field('日期（請核對）',inp('ocrDate','date',date?`${date[1]}-${date[2].padStart(2,'0')}-${date[3].padStart(2,'0')}`:td()))+`<details><summary>辨識文字</summary><pre style="white-space:pre-wrap">${E(text)}</pre></details>`+btn('帶入新增支出','Ledger10.applyOcr()');status.textContent='辨識完成，請核對後帶入。';}catch(e){status.textContent='辨識工具未能載入。請確認已上傳完整新版資料夾，並使用網站網址開啟。可先手動填入金額。';}finally{if(worker)await worker.terminate();}};
+ N.applyOcr=()=>{const a=Number(v('ocrAmount')),d=v('ocrDate');if(!Number.isFinite(a)||a<=0||!d)return alert('請確認金額及日期');$('eamt').value=a;$('edate').value=d.slice(2).replaceAll('-','');closeM('v10Modal');};
+ $('expenseM').querySelector('.sheet-title-row').insertAdjacentHTML('afterend',`<div class="v10-actions">${btn('辨識收據','Ledger10.ocrForm()')}</div>`);
+ // Search filters remain mounted while results update, preserving keyboard focus.
+ renderSearch=(query='')=>{page('搜尋',`<div class="card"><div class="v10-grid">${field('關鍵字',inp('sText','search',query))}${field('月份',inp('sMonth','month'))}${field('最低金額',inp('sMin','number','','step="0.01"'))}${field('最高金額',inp('sMax','number','','step="0.01"'))}${field('付款方式','<select id="sPay"><option value="">全部</option><option>現金</option><option>信用卡</option><option>預繳帳戶</option><option>複合</option><option>貨到付款</option></select>')}</div></div><div id="sResults"></div>`);['sText','sMonth','sMin','sMax','sPay'].forEach(id=>$(id).addEventListener('input',N.searchResults));N.searchResults();};
+ N.searchResults=()=>{const q=v('sText').trim().toLowerCase(),rows=D.e.filter(e=>(!q||[e.item,e.cat,e.person,e.pay,e.card,e.date].join(' ').toLowerCase().includes(q))&&(!v('sMonth')||e.date?.startsWith(v('sMonth')))&&(!v('sPay')||e.pay===v('sPay'))&&(v('sMin')===''||n(e.amount)>=Number(v('sMin')))&&(v('sMax')===''||n(e.amount)<=Number(v('sMax'))));$('sResults').innerHTML=`<div class="card">共 ${rows.length} 筆</div>`+rows.slice().reverse().map(recentRecord).join('');};
+ N.organize=()=>{page('分類與帳戶排序',`<div class="card"><h2>大分類</h2>${D.cats.map((c,i)=>`<div class="v10-setting"><span>${E(c)} ${S.inactiveCats.includes(c)?'（停用）':''}</span><div>${btn('↑',`Ledger10.reorder('cats',${i},-1)`)}${btn('↓',`Ledger10.reorder('cats',${i},1)`)}${btn(S.inactiveCats.includes(c)?'啟用':'停用',`Ledger10.toggleCat(${i})`)}</div></div>`).join('')}</div>${['cashAccounts','prepaid','cards'].map(k=>`<div class="card"><h2>${{cashAccounts:'現金帳戶',prepaid:'預繳帳戶',cards:'信用卡'}[k]}</h2>${D[k].map((a,i)=>`<div class="v10-setting"><span>${E(a.name)}</span><div>${btn('↑',`Ledger10.reorder('${k}',${i},-1)`)}${btn('↓',`Ledger10.reorder('${k}',${i},1)`)}</div></div>`).join('')}</div>`).join('')}`,'停用分類保留歷史紀錄，只從新增支出的選單隱藏。');};
+ N.toggleCat=i=>{const c=D.cats[i];S.inactiveCats=S.inactiveCats.includes(c)?S.inactiveCats.filter(x=>x!==c):[...S.inactiveCats,c];save();N.organize();};
+ N.reorder=(k,i,d)=>{if(i+d<0||i+d>=D[k].length)return;if(k==='cashAccounts'){const old=D.cashAccounts[0].id;D.e.forEach(e=>e.cashAccountId||=old);S.legacyCashId||=old;}[D[k][i],D[k][i+d]]=[D[k][i+d],D[k][i]];save();N.organize();};
+ const beforeOpen=openExpense;openExpense=()=>{beforeOpen();Array.from($('ecat').options).forEach(o=>{if(S.inactiveCats.includes(o.value))o.remove();});if(!$('ecat').value&&$('ecat').options.length)$('ecat').selectedIndex=0;renderExpenseItems();$('eitem').selectedIndex=-1;};
+ N.appearance=()=>page('字體與背景',`<div class="card">${field('字體大小',`<select onchange="Ledger10.font(this.value)"><option value="15" ${n(S.fontSize)===15?'selected':''}>標準</option><option value="17" ${n(S.fontSize)===17?'selected':''}>大</option><option value="19" ${n(S.fontSize)===19?'selected':''}>特大</option></select>`)}${btn('背景圖片與遮罩透明度',"generic('背景')")}</div>`);
+ N.font=size=>{S.fontSize=Number(size);document.body.style.fontSize=size+'px';save();};if(S.fontSize)document.body.style.fontSize=S.fontSize+'px';
+ N.analysis=()=>{const month=td().slice(0,7);page('消費分析',`<div class="card"><div class="v10-grid">${field('月份',inp('anMonth','month',month))}${field('統計層級','<select id="anLevel"><option value="cat">大分類</option><option value="item">小分類／項目</option></select>')}${field('開始日期',inp('anStart','date',month+'-01'))}${field('結束日期',inp('anEnd','date',new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toLocaleDateString('sv-SE')))}${field('指定大分類',`<select id="anCat"><option value="">全部</option>${D.cats.map(c=>`<option>${E(c)}</option>`).join('')}</select>`)}</div></div><div id="anChart"></div><div id="anDrill"></div>`,'退款扣回原消費月份，轉帳／加值／信用卡繳款不計消費。');['anLevel','anStart','anEnd','anCat'].forEach(id=>$(id).onchange=N.drawAnalysis);$('anMonth').onchange=()=>{const m=v('anMonth');if(!m)return;$('anStart').value=m+'-01';const [y,mo]=m.split('-').map(Number);$('anEnd').value=new Date(y,mo,0).toLocaleDateString('sv-SE');N.drawAnalysis();};N.drawAnalysis();};
+ N.analysisRows=()=>{const rows=D.e.filter(e=>!e.isCreditCardPayment&&!e.draft&&e.date>=v('anStart')&&e.date<=v('anEnd')&&(!v('anCat')||e.cat===v('anCat'))).map(e=>({...e,net:N.net(e),source:e}));if(!v('anCat')||v('anCat')==='手續費'){S.moves.filter(t=>t.date>=v('anStart')&&t.date<=v('anEnd')&&t.fee).forEach(t=>rows.push({cat:'手續費',item:'轉帳手續費',date:t.date,net:t.fee}));D.e.filter(e=>e.date>=v('anStart')&&e.date<=v('anEnd')&&e.installment?.fee).forEach(e=>rows.push({cat:'手續費',item:'分期手續費',date:e.date,net:e.installment.fee}));}return rows;};
+ N.drawAnalysis=()=>{if(v('anStart')>v('anEnd'))return alert('開始日期不得晚於結束日期');const rows=N.analysisRows(),level=v('anLevel'),totals={};rows.forEach(e=>{const k=e[level]||'未分類';totals[k]=round(n(totals[k])+n(e.net));});const groups=Object.entries(totals).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]),total=round(groups.reduce((s,r)=>s+r[1],0)),colors=['#7756e8','#e76d8a','#419ecc','#eab04d','#44ad8d','#ad79c5','#c07e54'];N.analysisGroups=groups;let angle=-Math.PI/2;const paths=groups.map(([name,amount],i)=>{const start=angle;angle+=amount/total*Math.PI*2;const x1=100+90*Math.cos(start),y1=100+90*Math.sin(start),x2=100+90*Math.cos(angle),y2=100+90*Math.sin(angle);return groups.length===1?`<circle cx="100" cy="100" r="90" fill="${colors[i%colors.length]}" onclick="Ledger10.analysisDetail(${i})"/>`:`<path d="M100 100 L${x1} ${y1} A90 90 0 ${angle-start>Math.PI?1:0} 1 ${x2} ${y2} Z" fill="${colors[i%colors.length]}" onclick="Ledger10.analysisDetail(${i})"><title>${E(name)} ${f(amount)}</title></path>`;}).join('');$('anChart').innerHTML=`<div class="card"><div class="val">${f(total)}</div><div>${rows.filter(r=>r.source).length}筆消費</div>${total?`<svg viewBox="0 0 200 200" role="img" aria-label="消費分類圓餅圖" style="display:block;max-width:260px;margin:16px auto">${paths}</svg>`:'<p>此期間沒有消費</p>'}${groups.map(([name,amount],i)=>`<button class="v10-analysis-row" onclick="Ledger10.analysisDetail(${i})"><span style="color:${colors[i%colors.length]}">●</span> ${E(name)} <b>${f(amount)}</b> ${(amount/total*100).toFixed(1)}%</button>`).join('')}</div>`;$('anDrill').innerHTML='';};
+ N.analysisDetail=i=>{const name=N.analysisGroups[i][0];$('anDrill').innerHTML=`<div class="card"><h2>${E(name)}</h2>${N.analysisRows().filter(e=>(e[v('anLevel')]||'未分類')===name).map(e=>`<div class="item">${E(e.date)}｜${E(e.item||e.cat)} <b>${f(e.net)}</b>${e.source?N.actions(D.e.indexOf(e.source)):''}</div>`).join('')}</div>`;};
+ openMonthlyAnalysis=N.analysis;
+ // Recycle bin retains photo IDs until explicitly purged.
+ const oldPhotoUsed=photoIdInUse;photoIdInUse=id=>oldPhotoUsed(id)||S.trash.some(t=>(t.entry?.photoIds||[]).includes(id)||t.book?.entries.some(e=>(e.photoIds||[]).includes(id)));
+ deleteFormal=async i=>{const e=D.e[i];if(!e)return;if(S.refunds.some(r=>r.entryId===e.id)||S.settlements.some(r=>r.entryId===e.id)||e.installment)return alert('請先取消此筆退款、付款或分期連結再刪除');if(!confirm('移至刪除復原區？可以還原。'))return;if(e.pay==='預繳帳戶'){const a=D.prepaid.find(a=>a.id===e.prepaidAccountId);if(a)a.balance=round(a.balance+e.amount);}if(e.isCreditCardPayment){const c=D.cards.find(c=>c.id===e.creditCardId);if(c)c.paidStatements=c.paidStatements.filter(k=>k!==e.cardStatementKey);}S.trash.push({id:u(),kind:'formal',entry:structuredClone(e),deletedAt:td()});D.e.splice(i,1);save();generic('最近');};
+ deleteTempEntry=async i=>{if(N.receipts(B).length)return alert('已有收款紀錄，請先取消收款再刪除分攤支出');if(!confirm('移至刪除復原區？'))return;S.trash.push({id:u(),kind:'temp',bookId:B.id,entry:structuredClone(B.entries[i]),deletedAt:td()});B.entries.splice(i,1);save();detail();};
+ deleteBook=async()=>{if(!confirm('將整個臨時帳本移至刪除復原區？'))return;S.trash.push({id:u(),kind:'book',book:structuredClone(B),deletedAt:td()});D.b=D.b.filter(b=>b!==B);B=null;save();show('temp');};
+ N.trash=()=>page('刪除復原區',S.trash.map(t=>`<div class="card"><b>${E(t.entry?.item||t.entry?.cat||t.book?.name||'紀錄')}</b><div>${E(t.deletedAt)}｜${{formal:'正式支出',temp:'臨時支出',book:'臨時帳本'}[t.kind]}</div><div class="v10-actions">${btn('還原',`Ledger10.restoreTrash('${t.id}')`)}${btn('永久刪除',`Ledger10.purgeTrash('${t.id}')`)}</div></div>`).join('')||'<div class="card">目前沒有刪除紀錄</div>');
+ N.restoreTrash=id=>{const t=S.trash.find(t=>t.id===id);if(!t)return;if(t.kind==='formal'){if(D.e.some(e=>e.id===t.entry.id))return alert('已有同一筆紀錄');if(t.entry.pay==='預繳帳戶'){const a=D.prepaid.find(a=>a.id===t.entry.prepaidAccountId);if(!a||a.balance<t.entry.amount)return alert('預繳帳戶不存在或餘額不足，請先處理帳戶');a.balance=round(a.balance-t.entry.amount);}D.e.push(t.entry);}else if(t.kind==='temp'){const b=D.b.find(b=>b.id===t.bookId);if(!b)return alert('請先還原所屬臨時帳本');b.entries.push(t.entry);}else {if(D.b.some(b=>b.id===t.book.id))return alert('帳本已存在');D.b.push(t.book);}S.trash=S.trash.filter(x=>x!==t);save();N.trash();};
+ N.purgeTrash=async id=>{const t=S.trash.find(t=>t.id===id);if(!t||!confirm('永久刪除後無法復原，確定？'))return;const ids=[...(t.entry?.photoIds||[]),...(t.book?.entries||[]).flatMap(e=>e.photoIds||[])];S.trash=S.trash.filter(x=>x!==t);save();await cleanupUnusedPhotoIds(ids);N.trash();};
+ async function allStore(db,store){return new Promise((resolve,reject)=>{const tx=db.transaction(store),s=tx.objectStore(store),req=s.getAll(),keys=s.getAllKeys();tx.oncomplete=()=>{resolve(req.result.map((value,i)=>({key:keys.result[i],value})));db.close();};tx.onerror=()=>reject(tx.error);});}
+ const toData=blob=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob);});
+ function toBlob(data){const m=/^data:([^;]+);base64,(.*)$/.exec(data||'');if(!m)throw Error('附件格式錯誤');const bin=atob(m[2]);return new Blob([Uint8Array.from(bin,c=>c.charCodeAt(0))],{type:m[1]});}
+ async function snapshot(){const photos=await allStore(await photoDb(),PHOTO_STORE_NAME),backgrounds=await allStore(await backgroundDb(),'images');return {format:'money-full-backup',version:10,createdAt:new Date().toISOString(),data:structuredClone(D),settings:Object.fromEntries(['dailyExpenseHomeShortcutsV1',APPEARANCE_KEY,MONTH_OVERVIEW_KEY,BACKGROUND_MAX_MIGRATION_KEY,'ledger-member-groups'].map(k=>[k,localStorage.getItem(k)])),photos:await Promise.all(photos.map(async r=>({key:r.key,value:{...r.value,blob:await toData(r.value.blob)}}))),backgrounds:await Promise.all(backgrounds.map(async r=>({key:r.key,value:await toData(r.value)})))};}
+ N.backups=()=>page('資料備份與還原',`<div class="card"><h2>完整備份</h2><p>帳目、臨時帳本、帳戶、分類、範本、照片、背景和設定一次保存。</p><p>最後備份：${E(localStorage.getItem('ledger-last-backup')||'尚未備份')}</p>${btn('下載完整備份','Ledger10.exportBackup()')}<p id="backupStatus" role="status"></p></div><div class="card"><h2>還原備份</h2><input type="file" accept=".json,application/json" onchange="Ledger10.previewBackup(this.files[0])"><div id="backupPreview"></div></div><div class="card">${btn('匯出CSV（Excel可開啟）','Ledger10.exportCsv()')}${btn('刪除復原區','Ledger10.trash()')}</div>`,'還原前會先顯示差異，確認後以備份完整取代本裝置資料；不會在背景自動同步。');
+ N.exportBackup=async()=>{const status=$('backupStatus');try{if(status)status.textContent='正在整理照片與背景…';const data=await snapshot();download(new Blob([JSON.stringify(data)],{type:'application/json'}),'記帳本完整備份-'+td()+'.json');localStorage.setItem('ledger-last-backup',new Date().toLocaleString('zh-TW'));if(status)status.textContent='備份已產生，請確認檔案已下載完成。';}catch(e){if(status)status.textContent='備份失敗：'+e.message;}};
+ function validate(b){if(b?.format!=='money-full-backup'||b.version!==10||!Array.isArray(b.data?.e)||!Array.isArray(b.data?.b)||!Array.isArray(b.photos)||!Array.isArray(b.backgrounds)||!b.data.v10)throw Error('不是V10完整備份');for(const e of b.data.e){if(!e||typeof e!=='object'||!Number.isFinite(Number(e.amount)))throw Error('支出格式錯誤');}for(const k of ['cashAccounts','prepaid','cards','cats'])if(!Array.isArray(b.data[k]))throw Error('帳戶／分類資料不完整');for(const k of ['moves','refunds','templates','settlements'])if(!Array.isArray(b.data.v10[k]))throw Error('付款資料不完整');b.photos.forEach(r=>toBlob(r.value.blob));b.backgrounds.forEach(r=>toBlob(r.value));}
+ N.previewBackup=async file=>{if(!file)return;try{const b=JSON.parse(await file.text());validate(b);N.importing=b;const existing=new Map(D.e.map(e=>[e.id,e]));let same=0,changed=0,added=0;b.data.e.forEach(e=>{if(!existing.has(e.id))added++;else if(JSON.stringify(e)===JSON.stringify(existing.get(e.id)))same++;else changed++;});const removed=D.e.filter(e=>!b.data.e.some(x=>x.id===e.id)).length;$('backupPreview').innerHTML=`<p>備份日期：${E(b.createdAt)}<br>正式支出 ${b.data.e.length} 筆｜臨時帳本 ${b.data.b.length} 本<br>新增 ${added} 筆｜相同 ${same} 筆｜內容不同 ${changed} 筆<br>本機另有 ${removed} 筆不在備份內，還原後將移除。<br>照片 ${b.photos.length} 張｜背景 ${b.backgrounds.length} 張</p><p>帳戶、設定與所有資料會完整替換。建議先下載目前資料的完整備份。</p>${btn('確認完整還原','Ledger10.restoreBackup()')}`;}catch(e){$('backupPreview').textContent='無法匯入：'+e.message;}};
+ async function replaceStore(db,store,rows){return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite'),s=tx.objectStore(store);s.clear();rows.forEach(r=>{if(s.keyPath)s.put(r.value);else s.put(r.value,r.key);});tx.oncomplete=()=>{db.close();resolve();};tx.onerror=tx.onabort=()=>reject(tx.error||Error('附件寫入失敗'));});}
+ async function applyBackup(b){await replaceStore(await photoDb(),PHOTO_STORE_NAME,b.photos.map(r=>({key:r.key,value:{...r.value,blob:toBlob(r.value.blob)}})));await replaceStore(await backgroundDb(),'images',b.backgrounds.map(r=>({key:r.key,value:toBlob(r.value)})));Object.keys(D).forEach(k=>delete D[k]);Object.assign(D,structuredClone(b.data));Object.keys(S).forEach(k=>delete S[k]);Object.assign(S,D.v10);D.v10=S;for(const k of ['dailyExpenseHomeShortcutsV1',APPEARANCE_KEY,MONTH_OVERVIEW_KEY,BACKGROUND_MAX_MIGRATION_KEY,'ledger-member-groups']){const value=b.settings?.[k];if(value===null||value===undefined)localStorage.removeItem(k);else localStorage.setItem(k,String(value));}save();}
+ N.restoreBackup=async()=>{if(!N.importing||N.restoring||!confirm('以此備份完整取代目前資料？'))return;N.restoring=true;let rollback;try{rollback=await snapshot();await applyBackup(N.importing);alert('還原完成，即將重新載入');location.reload();}catch(e){try{if(rollback)await applyBackup(rollback);}catch(_){}alert('還原失敗，已嘗試還原原資料：'+e.message);}finally{N.restoring=false;}};
+ N.exportCsv=()=>{const cell=x=>'"'+String(x??'').replace(/^[=+@-]/,"'"+'$&').replaceAll('"','""')+'"';const rows=[['日期','時間','大分類','項目','原金額','我的淨消費','付款方式','信用卡','已退款'],...D.e.map(e=>[e.date,e.time,e.cat,e.item,e.amount,N.net(e),e.pay,e.card,S.refunds.filter(r=>r.entryId===e.id&&r.status==='received').reduce((s,r)=>s+n(r.amount),0)])];download(new Blob(['\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'記帳明細-'+td()+'.csv');};
+ const groups=document.querySelectorAll('.side-group-body');groups[1].insertAdjacentHTML('beforeend',`<button class="side-link" onclick="Ledger10.organize()">分類與帳戶排序</button><button class="side-link" onclick="Ledger10.backups()">備份／還原／匯出</button><button class="side-link" onclick="Ledger10.trash()">刪除復原區</button>`);groups[2].insertAdjacentHTML('beforeend',`<button class="side-link" onclick="Ledger10.appearance()">字體與背景</button>`);
+})();
+</script><script>(() => {
+ const N=Ledger10,V=D.v10,E=esc,round=v=>Math.round(v*100)/100;
+ const cashAccount=()=>D.cashAccounts.find(a=>a.active!==false)||D.cashAccounts[0];
+ N.prepaidParts=e=>e.pay==='預繳帳戶'?[{id:e.prepaidAccountId,amount:+e.amount}]:e.pay==='複合'?(e.paymentParts||[]).filter(p=>p.prepaidAccountId||p.pay.startsWith('預繳－')).map(p=>({id:p.prepaidAccountId||D.prepaid.find(a=>'預繳－'+a.name===p.pay)?.id,amount:+p.amount})):[];
+ N.adjustPrepaid=(e,direction)=>{for(const p of N.prepaidParts(e)){const a=D.prepaid.find(a=>String(a.id)===String(p.id));if(a)a.balance=round(a.balance+direction*p.amount);}};
+ function addPrepaidChoices(id){const el=$(id);if(!el)return;D.prepaid.filter(a=>a.active!==false).forEach(a=>{const pay='預繳－'+a.name;if(![...el.options].some(o=>o.value===pay))el.add(new Option(pay,pay));});}
+ const mixed=renderMixedPaymentSelect;renderMixedPaymentSelect=(id,def)=>{mixed(id,def);if(id.startsWith('emix'))addPrepaidChoices(id);};
+ const saveBefore=saveExpense;
+ saveExpense=async()=>{
+   const cash=$('vCash');if(['現金','複合'].includes($('epay').value)&&!cash?.value)return alert('請選擇現金付款帳戶');
+   const parts=[];
+   if($('epay').value==='複合'){
+     for(let i=1;i<=2;i++){const pay=$('emixpay'+i).value,amount=Number($('emixamt'+i).value);if(!Number.isFinite(amount)||amount<=0||Math.abs(amount*100-Math.round(amount*100))>.00001)return alert('複合付款金額需大於0，最多兩位小數');if(pay.startsWith('預繳－')){const a=D.prepaid.find(a=>'預繳－'+a.name===pay&&a.active!==false);if(!a)return alert('請重新選擇預繳帳戶');parts.push({id:a.id,amount,index:i-1});}}
+     for(const a of D.prepaid){const needed=parts.filter(p=>p.id===a.id).reduce((s,p)=>s+p.amount,0);if(a.balance<needed)return alert(`預繳餘額不足：${a.name}\n目前 ${money(a.balance)}／需付 ${money(needed)}／尚差 ${money(needed-a.balance)}`);}
+   }
+   if(N.expenseSaveBusy)return;N.expenseSaveBusy=true;
+  const count=D.e.length;try{await saveBefore();}finally{N.expenseSaveBusy=false;}if(D.e.length===count)return;const entry=D.e.at(-1);
+   parts.forEach(p=>{entry.paymentParts[p.index].prepaidAccountId=p.id;const a=D.prepaid.find(a=>a.id===p.id);a.balance=round(a.balance-p.amount);a.transactions.push({date:entry.date,type:'spend',amount:-p.amount,note:entry.item||entry.cat,entryId:entry.id});});persist();
+ };
+ const oldDelete=deleteFormal;
+ deleteFormal=async i=>{const e=D.e[i];if(!e)return;await oldDelete(i);if(!D.e.includes(e)&&e.pay==='複合'){N.adjustPrepaid(e,1);persist();}};
+ const restore= N.restoreTrash;
+ N.restoreTrash=id=>{const t=V.trash.find(t=>t.id===id);if(t?.kind==='formal'&&t.entry.pay==='複合'){for(const p of N.prepaidParts(t.entry)){const a=D.prepaid.find(a=>a.id===p.id);if(!a||a.balance<p.amount)return alert('預繳帳戶餘額不足，無法還原');}restore(id);if(!V.trash.includes(t)){N.adjustPrepaid(t.entry,-1);persist();}}else restore(id);};
+ const linked=e=>e.isCreditCardPayment||e.installment||V.refunds.some(r=>r.entryId===e.id)||V.settlements.some(s=>s.entryId===e.id);
+ function modal(title,body,save){$('v10Modal').innerHTML=`<div class="sheet"><div class="top"><h2>${title}</h2><button onclick="closeM('v10Modal')">取消</button></div>${body}<button class="v10-primary" onclick="${save}">儲存</button></div>`;openM('v10Modal');}
+ editFormalAmount=i=>{const e=D.e[i];if(linked(e))return alert('此筆有繳款、退款、付款或分期連結，請先處理相關紀錄');N.amountIndex=i;modal('修改支出金額',`<div class="field"><label>總金額</label><input id="editTotal" type="number" step="0.01" value="${e.amount}"></div>${e.pay==='複合'?(e.paymentParts||[]).map((p,i)=>`<div class="field"><label>${E(p.pay)}</label><input id="editPart${i}" type="number" step="0.01" value="${p.amount}"></div>`).join(''):''}`,'Ledger10.saveAmount()');};
+ N.saveAmount=()=>{const e=D.e[N.amountIndex],a=Number($('editTotal').value);if(!Number.isFinite(a)||a<=0||Math.abs(a*100-Math.round(a*100))>.00001)return alert('金額需大於0，最多两位小數');const candidate=structuredClone(e);candidate.amount=a;candidate.draft=false;if(candidate.pay==='複合'){candidate.paymentParts.forEach((p,i)=>p.amount=Number($('editPart'+i).value));if(candidate.paymentParts.some(p=>!Number.isFinite(p.amount)||p.amount<=0)||Math.abs(candidate.paymentParts.reduce((s,p)=>s+p.amount,0)-a)>.001)return alert('各付款金額合計需等於總金額');}N.adjustPrepaid(e,1);let invalid=false;for(const p of N.prepaidParts(candidate)){const account=D.prepaid.find(a=>a.id===p.id),needed=N.prepaidParts(candidate).filter(x=>x.id===p.id).reduce((s,x)=>s+x.amount,0);if(!account||account.balance<needed)invalid=true;}if(invalid){N.adjustPrepaid(e,-1);return alert('预繳帳戶餘額不足');}Object.assign(e,candidate);N.adjustPrepaid(e,-1);persist();closeM('v10Modal');generic('最近');};
+ editFormalPayment=i=>{const e=D.e[i];if(linked(e))return alert('此筆有繳款、退款、付款或分期連結，請先處理相關紀錄');N.paymentIndex=i;const choices=[...D.cashAccounts.filter(a=>a.active!==false).map(a=>({ref:'cash:'+a.id,label:a.name})),...D.prepaid.filter(a=>a.active!==false).map(a=>({ref:'prepaid:'+a.id,label:'預繳－'+a.name})),...D.cards.filter(a=>a.active!==false).map(a=>({ref:'card:'+a.id,label:'信用卡－'+a.name})),{ref:'cod',label:'貨到付款'}];const selected=e.pay==='預繳帳戶'?'prepaid:'+e.prepaidAccountId:e.pay==='信用卡'?'card:'+D.cards.find(c=>c.name===e.card)?.id:e.pay==='貨到付款'?'cod':'cash:'+(e.cashAccountId||cashAccount().id);modal('修改付款帳戶',`<div class="field"><label>付款帳戶</label><select id="editPay">${choices.map(c=>`<option value="${c.ref}" ${c.ref===selected?'selected':''}>${E(c.label)}</option>`).join('')}</select></div>${e.pay==='複合'?'<p>此次修改會將整筆金額改為所選單一帳戶付款。</p>':''}`,'Ledger10.savePaymentChange()');};
+ N.savePaymentChange=()=>{const e=D.e[N.paymentIndex],ref=$('editPay').value,[kind,id]=ref.split(':'),a=(kind==='cash'?D.cashAccounts:kind==='prepaid'?D.prepaid:D.cards).find(a=>String(a.id)===id);if(ref!=='cod'&&!a)return alert('請選擇帳戶');N.adjustPrepaid(e,1);if(kind==='prepaid'&&a.balance<e.amount){N.adjustPrepaid(e,-1);return alert('預繳帳戶餘額不足');}Object.assign(e,{pay:kind==='cash'?'現金':kind==='prepaid'?'預繳帳戶':kind==='card'?'信用卡':'貨到付款',paymentParts:null,card:kind==='card'?a.name:'',prepaidAccountId:kind==='prepaid'?a.id:null,prepaidAccountName:kind==='prepaid'?a.name:'',cashAccountId:kind==='cash'?a.id:e.cashAccountId});N.adjustPrepaid(e,-1);persist();closeM('v10Modal');generic('最近');};
+ const codForm=N.codForm;N.codForm=id=>{codForm(id);const rows=V.settlements.filter(s=>s.entryId===id);$('v10Modal').querySelector('.sheet').insertAdjacentHTML('beforeend',rows.map(s=>`<div class="item">已付 ${money(s.amount)}｜${E(s.date)} <button onclick="Ledger10.undoCod('${s.id}')">取消付款紀錄</button></div>`).join(''));};
+ N.undoCod=id=>{const s=V.settlements.find(s=>s.id===id);if(!s||!confirm('取消付款並還原帳戶餘額？'))return;if(s.from.startsWith('prepaid:')){const a=D.prepaid.find(a=>'prepaid:'+a.id===s.from);if(a)a.balance=round(a.balance+s.amount);}V.settlements=V.settlements.filter(x=>x!==s);persist();closeM('v10Modal');openMonthlyMetric('pending');};
+ // Preserve links to fully-paid COD records in the expense details.
+ const entry=N.entry;N.entry=i=>{entry(i);const e=D.e[i];if(e&&V.settlements.some(s=>s.entryId===e.id)&&N.codRemaining(e)<=0)$('v10Modal').querySelector('.sheet').insertAdjacentHTML('beforeend',`<button onclick="Ledger10.codForm('${e.id}')">查看貨到付款紀錄</button>`);};
+ // Duplicate names would break older records that reference names rather than IDs.
+ const saveAccount=N.saveAccount;N.saveAccount=()=>{const {kind,id}=N.editAccount,list=kind==='cash'?D.cashAccounts:D.prepaid,name=$('aName').value.trim(),a=list.find(a=>String(a.id)===id);if(list.some(x=>x!==a&&x.name===name))return alert('帳戶名稱不可重複');const old=a?.name;saveAccount();if(a&&a.name!==old){D.e.forEach(e=>{if(e.prepaidAccountId===a.id)e.prepaidAccountName=a.name;(e.paymentParts||[]).forEach(p=>{if(p.prepaidAccountId===a.id||p.pay==='預繳－'+old)p.pay='預繳－'+a.name;});});persist();}};
+ // Unassigned legacy cash entries remain attached to the original first account after sorting.
+  V.legacyCashId ||= D.cashAccounts[0]?.id;
+  // Import each member's own share exactly once, including items paid by friends.
+  preview=()=>{if(B.imported)return alert('此帳本已匯入過');if(!B.members.includes('我'))return alert('請先在帳本成員加入「我」');const own=B.entries.reduce((s,e)=>s+(e.shares||[]).filter(x=>x.p==='我').reduce((t,x)=>t+Number(x.a),0),0);$('preview').innerHTML=`<div class="card"><h2>${E(B.name)}</h2><p>我的消費合計 ${money(own)}</p><p>包含朋友代付的部分；分攤收款不會再算一次消費。</p></div>`;openM('importM');};
+  doImport=()=>{if(B.imported)return;B.entries.filter(e=>!e.draft).forEach(e=>{const own=round((e.shares||[]).filter(s=>s.p==='我').reduce((s,p)=>s+Number(p.a),0));if(e.payer!=='我'&&own<=0)return;const mine=e.payer==='我';D.e.push({id:recordUid('formal-import'),date:e.date,time:e.time||'',item:B.name+'－'+e.item,cat:'非必要支出',amount:mine?e.amount:own,pay:mine?(e.pay?.startsWith('信用卡－')?'信用卡':e.pay==='複合式'?'複合':e.pay):'分攤待付款',card:mine?(e.card||e.pay?.replace(/^信用卡－/,'')||''):'',paymentParts:mine&&['複合','複合式'].includes(e.pay)?structuredClone(tempPaymentParts(e)):null,proxy:mine?round(e.amount-own):0,recv:mine?round(e.amount-own):0,person:'分攤帳本',photoIds:[...(e.photoIds||[])],bookId:B.id,bookEntryId:e.id,cashAccountId:cashAccount().id});});B.imported=true;B.importVersion=10;closeM('importM');persist();settle();alert('已匯入；每筆只計入自己的負擔，分攤收款另外記錄。');};
+  const baseBalance=N.balance;
+  N.balance=ref=>{let amount=baseBalance(ref);if(ref.startsWith('cash:'))D.b.filter(b=>b.imported&&b.importVersion===10).forEach(b=>(b.receipts||[]).forEach(r=>{const receiptRef='cash:'+(r.cashAccountId||V.legacyCashId);if(ref===receiptRef){if(r.to==='我')amount+=r.amount;if(r.from==='我')amount-=r.amount;}}));return round(amount);};
+  const baseMetrics=N.metrics;
+  N.metrics=(month=td().slice(0,7))=>{const m=baseMetrics(month);D.b.filter(b=>b.imported&&b.importVersion===10).forEach(b=>(b.receipts||[]).filter(r=>r.date?.startsWith(month)).forEach(r=>{if(r.from==='我')m.paid+=r.amount;if(r.to==='我')m.paid-=r.amount;}));m.paid=round(m.paid);return m;};
+  const receiptForm=N.bookReceiptForm;N.bookReceiptForm=()=>{receiptForm();$('v10Modal').querySelector('.sheet').insertAdjacentHTML('beforeend',`<div class="field"><label>我的收付款帳戶</label><select id="receiptCash">${D.cashAccounts.filter(a=>a.active!==false).map(a=>`<option value="${a.id}">${E(a.name)}</option>`).join('')}</select></div>`);};
+  const receiptSave=N.bookReceiptSave;N.bookReceiptSave=()=>{const id=Number($('receiptCash')?.value)||cashAccount().id,before=(B.receipts||[]).length;receiptSave();if((B.receipts||[]).length>before){B.receipts.at(-1).cashAccountId=id;persist();}};
+  const priorHome=home;home=()=>{priorHome();const m=N.metrics();$('paid').textContent=money(m.paid);D.b.filter(b=>b.imported&&b.importVersion===10).forEach(b=>{const me=N.bookBalances(b).find(x=>x.p==='我');if(me&&Math.abs(me.net)>.01){$('remindersCard').hidden=false;$('reminders').insertAdjacentHTML('beforeend',`<div class="item"><b>${E(b.name)}｜${me.net>0?'待收款':'待付分攤款'} ${money(Math.abs(me.net))}</b><button onclick="Ledger10.openArchivedBook('${b.id}')">查看結算</button></div>`);}});};
+  N.openArchivedBook=id=>{B=D.b.find(b=>String(b.id)===String(id));if(!B)return;openBook(B.id);settle();};
+  home();
+})();
+</script><script>if("serviceWorker" in navigator && location.protocol!=="file:"){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(()=>{});}</script></body>
 </html>

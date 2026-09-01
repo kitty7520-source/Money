@@ -1,32 +1,15 @@
-const C = "ledger-v8-9-2-photo-grid-full-strip-20260830";
-self.addEventListener("install", (e) => {
-  self.skipWaiting();
-  e.waitUntil(
-    caches
-      .open(C)
-      .then((c) =>
-        c.addAll(["./", "./index.html", "./app.js", "./manifest.webmanifest"]),
-      ),
-  );
+const CACHE = 'money-v10-20260901';
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(['./','./index.html'])).then(() => self.skipWaiting()));
 });
-self.addEventListener("activate", (e) =>
-  e.waitUntil(
-    caches
-      .keys()
-      .then((k) =>
-        Promise.all(k.filter((x) => x !== C).map((x) => caches.delete(x))),
-      )
-      .then(() => self.clients.claim()),
-  ),
-);
-self.addEventListener("fetch", (e) =>
-  e.respondWith(
-    fetch(e.request)
-      .then((r) => {
-        let z = r.clone();
-        caches.open(C).then((c) => c.put(e.request, z));
-        return r;
-      })
-      .catch(() => caches.match(e.request)),
-  ),
-);
+self.addEventListener('activate', event => {
+  event.waitUntil(self.clients.claim());
+});
+self.addEventListener('fetch', event => {
+  const url=new URL(event.request.url);
+  if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
+  event.respondWith(fetch(event.request).then(response=>{
+    if(response.ok){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(cache=>cache.put(event.request,copy)));}
+    return response;
+  }).catch(async()=>await caches.match(event.request,{cacheName:CACHE})||(event.request.mode==='navigate'?await caches.match('./index.html',{cacheName:CACHE}):Response.error())));
+});
